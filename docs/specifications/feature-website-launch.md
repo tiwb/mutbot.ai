@@ -286,7 +286,7 @@ Write-Host "Done! Run 'mutbot' to start, then open https://mutbot.ai"
 
 ## 8. 实施步骤清单
 
-### 阶段一：项目骨架 [进行中]
+### 阶段一：项目骨架 [✅ 已完成]
 - [x] **Task 1.1**: 初始化 Astro 项目
   - [x] `npm create astro@latest`
   - [x] 安装 Tailwind CSS 集成
@@ -296,22 +296,22 @@ Write-Host "Done! Run 'mutbot' to start, then open https://mutbot.ai"
 - [x] **Task 1.2**: 配置部署
   - [x] 创建 `.github/workflows/deploy.yml`
   - [x] 添加 `public/CNAME`
-  - [ ] 推送并验证 GitHub Pages 部署
-  - 状态：🔄 待推送验证
+  - [x] 推送并验证 GitHub Pages 部署
+  - 状态：✅ 已完成
 
-### 阶段二：Landing Page [待开始]
-- [ ] **Task 2.1**: 基础布局 + 暗色主题
-  - [ ] `Base.astro` 布局（暗色主题、字体、meta tags）
-  - [ ] 全局 CSS + Tailwind 配置
-  - 状态：⏸️ 待开始
+### 阶段二：Landing Page [✅ 已完成]
+- [x] **Task 2.1**: 基础布局 + 暗色主题
+  - [x] `Base.astro` 布局（暗色主题、字体、meta tags）
+  - [x] 全局 CSS + Tailwind 配置
+  - 状态：✅ 已完成
 
-- [ ] **Task 2.2**: Hero + Features + Footer
-  - [ ] Logo + Tagline "Define Your AI"
-  - [ ] 安装命令 + 复制按钮
-  - [ ] 3 个功能卡片
-  - [ ] Footer
-  - [ ] 响应式适配
-  - 状态：⏸️ 待开始
+- [x] **Task 2.2**: Hero + Features + Footer
+  - [x] Logo + Tagline "Define Your AI"
+  - [x] 安装命令 + 复制按钮
+  - [x] 3 个功能卡片
+  - [x] Footer
+  - [x] 响应式适配
+  - 状态：✅ 已完成
 
 ### 阶段三：Launcher 逻辑 [待开始]
 - [ ] **Task 3.1**: 本地检测

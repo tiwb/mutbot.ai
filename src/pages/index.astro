@@ -1,13 +1,11 @@
 ---
 import Base from "../layouts/Base.astro";
+import Landing from "../components/Landing.astro";
+import AppShell from "../components/AppShell.astro";
 import "../styles/global.css";
 ---
 
 <Base title="MutBot — Define Your AI">
-  <main class="flex items-center justify-center min-h-screen">
-    <div class="text-center">
-      <h1 class="text-5xl font-bold mb-4">MutBot</h1>
-      <p class="text-xl text-gray-400">Define Your AI</p>
-    </div>
-  </main>
+  <AppShell />
+  <Landing />
 </Base>
