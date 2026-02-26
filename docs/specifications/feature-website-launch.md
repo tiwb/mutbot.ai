@@ -286,18 +286,18 @@ Write-Host "Done! Run 'mutbot' to start, then open https://mutbot.ai"
 
 ## 8. 实施步骤清单
 
-### 阶段一：项目骨架 [待开始]
-- [ ] **Task 1.1**: 初始化 Astro 项目
-  - [ ] `npm create astro@latest`
-  - [ ] 安装 Tailwind CSS 集成
-  - [ ] 配置 `astro.config.mjs`（site: `https://mutbot.ai`）
-  - 状态：⏸️ 待开始
+### 阶段一：项目骨架 [进行中]
+- [x] **Task 1.1**: 初始化 Astro 项目
+  - [x] `npm create astro@latest`
+  - [x] 安装 Tailwind CSS 集成
+  - [x] 配置 `astro.config.mjs`（site: `https://mutbot.ai`）
+  - 状态：✅ 已完成
 
-- [ ] **Task 1.2**: 配置部署
-  - [ ] 创建 `.github/workflows/deploy.yml`
-  - [ ] 添加 `public/CNAME`
+- [x] **Task 1.2**: 配置部署
+  - [x] 创建 `.github/workflows/deploy.yml`
+  - [x] 添加 `public/CNAME`
   - [ ] 推送并验证 GitHub Pages 部署
-  - 状态：⏸️ 待开始
+  - 状态：🔄 待推送验证
 
 ### 阶段二：Landing Page [待开始]
 - [ ] **Task 2.1**: 基础布局 + 暗色主题
