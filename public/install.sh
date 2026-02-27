@@ -7,18 +7,14 @@ set -eu
 if ! command -v uv >/dev/null 2>&1; then
     echo "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh
-    # uv installer adds ~/.local/bin to PATH via shell profile,
-    # but current shell session needs explicit export
     export PATH="$HOME/.local/bin:$PATH"
 fi
 
-# --- Install mutbot if not present ---
-if ! uv tool list 2>/dev/null | grep -q "^mutbot "; then
-    echo "Installing mutbot..."
-    uv tool install mutbot
-fi
+# --- Install mutbot (idempotent — skips if already up-to-date) ---
+echo "Installing mutbot..."
+uv tool install mutbot --upgrade
 
-# --- Ensure ~/.local/bin is on PATH ---
+# Ensure uv tools bin is on PATH
 export PATH="$HOME/.local/bin:$PATH"
 
 # --- Launch ---

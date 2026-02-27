@@ -6,16 +6,16 @@ $ErrorActionPreference = "Stop"
 if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
     Write-Host "Installing uv..." -ForegroundColor Cyan
     irm https://astral.sh/uv/install.ps1 | iex
-    # Refresh PATH for current session
+    # Refresh PATH to pick up uv
     $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 }
 
-# --- Install mutbot if not present ---
-$toolList = uv tool list 2>$null
-if ($toolList -notmatch "^mutbot ") {
-    Write-Host "Installing mutbot..." -ForegroundColor Cyan
-    uv tool install mutbot
-}
+# --- Install mutbot (idempotent — skips if already up-to-date) ---
+Write-Host "Installing mutbot..." -ForegroundColor Cyan
+uv tool install mutbot --upgrade
+
+# Refresh PATH to pick up uv tools bin
+$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "User") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "Machine")
 
 # --- Launch ---
 Write-Host ""
