@@ -3,3 +3,527 @@
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
 }
+
+/* ===================================================================
+   Section heading
+   =================================================================== */
+
+.section-heading {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #858585;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #333;
+}
+
+/* Heading row: heading + inline controls on same line */
+.section-heading-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #333;
+}
+
+.section-heading-row .section-heading {
+  margin-bottom: 0;
+  padding-bottom: 0;
+  border-bottom: none;
+}
+
+.section-heading-row .install-tabs {
+  margin-bottom: 0;
+}
+
+/* ===================================================================
+   Workspace actions (Start section links/buttons)
+   =================================================================== */
+
+.ws-action {
+  color: #3b82f6;
+  text-decoration: none;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.ws-action:hover {
+  color: #60a5fa;
+}
+
+/* ===================================================================
+   Workspace area
+   =================================================================== */
+
+.ws-status {
+  font-size: 13px;
+  color: #858585;
+  padding: 8px 4px;
+}
+
+.ws-status.connecting::before {
+  content: "";
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid #555;
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  margin-right: 8px;
+  animation: spin 0.8s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.ws-status.disconnected,
+.ws-status.mobile-hint {
+  color: #a3a3a3;
+  line-height: 1.6;
+}
+
+.ws-status.disconnected p:first-child,
+.ws-status.mobile-hint p:first-child {
+  color: #d4d4d4;
+}
+
+.ws-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.ws-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #d4d4d4;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 8px;
+  text-align: left;
+  border-radius: 2px;
+  transition: background 0.15s;
+}
+
+.ws-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ws-item-name {
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.ws-item-path {
+  color: #737373;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ws-more {
+  background: none;
+  border: none;
+  color: #3b82f6;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  text-align: left;
+  transition: color 0.15s;
+}
+
+.ws-more:hover {
+  color: #60a5fa;
+}
+
+/* Workspace search dialog */
+
+.ws-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 20vh;
+  z-index: 9999;
+}
+
+.ws-search-dialog {
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  width: 480px;
+  max-width: 95vw;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.ws-search-input-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #858585;
+}
+
+.ws-search-input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: #d4d4d4;
+  font-family: inherit;
+  font-size: 14px;
+}
+
+.ws-search-list {
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.ws-search-empty {
+  color: #858585;
+  font-size: 13px;
+  padding: 12px 16px;
+  text-align: center;
+}
+
+.ws-search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #d4d4d4;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 7px 16px;
+  text-align: left;
+  transition: background 0.15s;
+}
+
+.ws-search-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.ws-search-item-name {
+  color: #3b82f6;
+  flex-shrink: 0;
+}
+
+.ws-search-item-path {
+  color: #737373;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ===================================================================
+   Install box
+   =================================================================== */
+
+.install-box {
+  border-left: 3px solid #3b82f6;
+  padding-left: 16px;
+}
+
+.install-tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.install-tab {
+  background: none;
+  border: 1px solid #333;
+  color: #858585;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.15s;
+}
+
+.install-tab.active {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: #3b82f6;
+  color: #d4d4d4;
+}
+
+/* New workspace button (same look as install-tab, independent of tab logic) */
+
+.ws-new-btn {
+  background: none;
+  border: 1px solid #333;
+  color: #858585;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 4px 12px;
+  cursor: pointer;
+  border-radius: 2px;
+  transition: all 0.15s;
+}
+
+.ws-new-btn:hover {
+  border-color: #3b82f6;
+  color: #d4d4d4;
+}
+
+.install-cmd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: #111827;
+  border: 1px solid #1f2937;
+  border-radius: 6px;
+  padding: 10px 14px;
+}
+
+.install-cmd code {
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  font-size: 13px;
+  color: #34d399;
+  user-select: all;
+  flex: 1;
+}
+
+.copy-cmd-btn {
+  background: none;
+  border: none;
+  color: #6b7280;
+  cursor: pointer;
+  padding: 2px;
+  flex-shrink: 0;
+  transition: color 0.15s;
+}
+
+.copy-cmd-btn:hover {
+  color: #d4d4d4;
+}
+
+/* ===================================================================
+   Feature cards (right column)
+   =================================================================== */
+
+.feature-card {
+  display: flex;
+  gap: 14px;
+  padding: 16px;
+  background: rgba(17, 24, 39, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+}
+
+.feature-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+/* ===================================================================
+   Directory picker overlay (跨域目录选择器)
+   =================================================================== */
+
+.dp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.dp-dialog {
+  background: #1a1a2e;
+  border: 1px solid #333;
+  width: 480px;
+  max-width: 95vw;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+}
+
+.dp-title {
+  font-size: 14px;
+  font-weight: 600;
+  padding: 14px 16px 10px;
+  color: #e5e5e5;
+}
+
+.dp-path-bar {
+  padding: 0 16px 10px;
+}
+
+.dp-path {
+  background: #262626;
+  border: 1px solid #404040;
+  color: #a3a3a3;
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 10px;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  border-radius: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dp-error {
+  color: #f87171;
+  font-size: 12px;
+  padding: 0 16px 8px;
+}
+
+.dp-entries {
+  flex: 1;
+  overflow-y: auto;
+  min-height: 200px;
+  max-height: 400px;
+  padding: 0 8px;
+}
+
+.dp-loading,
+.dp-empty {
+  color: #737373;
+  font-size: 13px;
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.dp-entry {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  background: none;
+  border: none;
+  color: #d4d4d4;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 8px;
+  text-align: left;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.dp-entry:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dp-entry-icon {
+  flex-shrink: 0;
+  width: 18px;
+  text-align: center;
+  font-size: 14px;
+}
+
+.dp-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 16px;
+  border-top: 1px solid #333;
+}
+
+.dp-btn-primary {
+  background: #3b82f6;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+
+.dp-btn-primary:hover {
+  background: #2563eb;
+}
+
+.dp-btn-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.dp-btn-secondary {
+  background: transparent;
+  border: 1px solid #404040;
+  color: #a3a3a3;
+  font-family: inherit;
+  font-size: 13px;
+  padding: 6px 16px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.15s;
+}
+
+.dp-btn-secondary:hover {
+  border-color: #737373;
+  color: #d4d4d4;
+}
+
+/* ===================================================================
+   Workspace item icons & New Workspace button
+   =================================================================== */
+
+.ws-item-icon {
+  flex-shrink: 0;
+  color: #737373;
+}
+
+.ws-new-item {
+  color: #858585;
+  margin-top: 2px;
+}
+
+.ws-new-item:hover {
+  color: #d4d4d4;
+}
+
+.ws-new-item .ws-item-name {
+  color: inherit;
+}
+
+/* Retry link in disconnected message */
+
+.ws-retry {
+  color: #3b82f6;
+  text-decoration: none;
+  margin-left: 4px;
+  cursor: pointer;
+}
+
+.ws-retry:hover {
+  color: #60a5fa;
+  text-decoration: underline;
+}

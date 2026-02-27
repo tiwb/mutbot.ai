@@ -5,7 +5,20 @@
   <!-- Header -->
   <header class="fixed top-0 w-full z-50 border-b border-white/5 bg-gray-950/80 backdrop-blur-md">
     <div class="max-w-6xl mx-auto px-6 h-14 flex items-center justify-between">
-      <a href="/" class="text-lg font-bold tracking-tight">MutBot</a>
+      <a href="/" class="flex items-center gap-2">
+        <svg class="w-7 h-7" viewBox="0 0 128 128" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="logo-g" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#10B981"/>
+              <stop offset="100%" stop-color="#06B6D4"/>
+            </linearGradient>
+          </defs>
+          <rect x="8" y="8" width="112" height="112" rx="20" fill="none" stroke="url(#logo-g)" stroke-width="5"/>
+          <text x="58" y="88" font-family="Georgia, 'Times New Roman', serif" font-size="80" font-weight="bold" fill="url(#logo-g)">μ</text>
+          <path d="M 88 100 L 106 100" stroke="#06B6D4" stroke-width="4" stroke-linecap="round"/>
+          <path d="M 100 94 L 108 100 L 100 106" stroke="#06B6D4" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+      </a>
       <a
         href="https://github.com/tiwb/mutbot"
         target="_blank"
@@ -19,86 +32,137 @@
     </div>
   </header>
 
-  <!-- Hero -->
-  <section class="pt-32 pb-20 px-6">
-    <div class="max-w-3xl mx-auto text-center">
-      <h1 class="text-6xl sm:text-7xl font-bold tracking-tight mb-6">
-        MutBot
-      </h1>
-      <p class="text-xl sm:text-2xl text-gray-400 mb-12">Define Your AI</p>
+  <!-- Main: 左右两栏 -->
+  <main class="pt-20 pb-12 px-6">
+    <div class="max-w-5xl mx-auto flex flex-col lg:flex-row gap-16 lg:gap-20">
 
-      <!-- Install command -->
-      <div class="inline-flex items-center gap-3 bg-gray-900 border border-white/10 rounded-lg px-5 py-3 mb-6">
-        <code class="text-sm sm:text-base text-emerald-400 font-mono select-all">
-          curl -LsSf https://mutbot.ai/install.sh | sh
-        </code>
-        <button
-          id="copy-btn"
-          class="text-gray-500 hover:text-white transition-colors shrink-0 cursor-pointer"
-          title="Copy to clipboard"
-        >
-          <svg id="copy-icon" class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
-            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"></path>
-          </svg>
-          <svg id="check-icon" class="w-4 h-4 hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <polyline points="20 6 9 17 4 12"></polyline>
-          </svg>
-        </button>
+      <!-- 左栏 -->
+      <div class="flex-1 min-w-0">
+        <!-- 品牌区 -->
+        <div class="mb-10">
+          <h1 class="text-6xl sm:text-7xl font-bold tracking-tight mb-2 text-gray-100">MutBot</h1>
+          <p class="text-lg text-gray-500">Define Your AI</p>
+        </div>
+
+        <!-- Run MutBot -->
+        <section class="mb-8">
+          <div class="section-heading-row">
+            <h2 class="section-heading">1. Run MutBot</h2>
+            <div class="install-tabs">
+              <button class="install-tab" data-target="unix">macOS / Linux</button>
+              <button class="install-tab" data-target="windows">Windows</button>
+              <button class="install-tab" data-target="uv">uv</button>
+              <button class="install-tab" data-target="pip">pip</button>
+            </div>
+          </div>
+          <div class="install-box">
+            <div id="install-unix" class="install-panel">
+              <div class="install-cmd">
+                <code>curl -LsSf https://mutbot.ai/install.sh | sh</code>
+                <button class="copy-cmd-btn" data-cmd="curl -LsSf https://mutbot.ai/install.sh | sh" title="Copy">
+                  <svg class="w-4 h-4 icon-copy" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  </svg>
+                  <svg class="w-4 h-4 icon-check hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="install-windows" class="install-panel hidden">
+              <div class="install-cmd">
+                <code>irm https://mutbot.ai/install.ps1 | iex</code>
+                <button class="copy-cmd-btn" data-cmd="irm https://mutbot.ai/install.ps1 | iex" title="Copy">
+                  <svg class="w-4 h-4 icon-copy" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  </svg>
+                  <svg class="w-4 h-4 icon-check hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="install-uv" class="install-panel hidden">
+              <div class="install-cmd">
+                <code>uvx mutbot</code>
+                <button class="copy-cmd-btn" data-cmd="uvx mutbot" title="Copy">
+                  <svg class="w-4 h-4 icon-copy" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  </svg>
+                  <svg class="w-4 h-4 icon-check hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div id="install-pip" class="install-panel hidden">
+              <div class="install-cmd">
+                <code>pip install mutbot && python -m mutbot</code>
+                <button class="copy-cmd-btn" data-cmd="pip install mutbot && python -m mutbot" title="Copy">
+                  <svg class="w-4 h-4 icon-copy" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
+                  </svg>
+                  <svg class="w-4 h-4 icon-check hidden text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Open Workspace -->
+        <section class="mb-8">
+          <div class="section-heading-row">
+            <h2 class="section-heading">2. Open Workspace</h2>
+            <button class="ws-new-btn hidden" id="new-ws-btn">+ New</button>
+          </div>
+          <div id="ws-area">
+            <p class="ws-status connecting">Connecting to MutBot...</p>
+          </div>
+        </section>
       </div>
 
-      <div>
-        <a
-          href="http://localhost:8741"
-          class="inline-block text-sm text-gray-500 hover:text-gray-300 transition-colors mt-2"
-        >
-          Open local MutBot &rarr;
-        </a>
+      <!-- 右栏：特性卡片 -->
+      <div class="lg:w-80 flex flex-col gap-4 lg:pt-[148px]">
+        <div class="feature-card">
+          <div class="feature-icon bg-violet-500/10">
+            <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-violet-400 mb-1">You Define</h3>
+            <p class="text-xs text-gray-400 leading-relaxed">Shape your AI's behavior through natural conversation. Your preferences become its instincts.</p>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon bg-sky-500/10">
+            <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-sky-400 mb-1">Control Your Machine</h3>
+            <p class="text-xs text-gray-400 leading-relaxed">Run commands, edit files, and manage your projects — AI that works directly on your computer.</p>
+          </div>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon bg-emerald-500/10">
+            <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+              <path d="M21 2v6h-6"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M3 22v-6h6"/><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/>
+            </svg>
+          </div>
+          <div>
+            <h3 class="text-sm font-semibold text-emerald-400 mb-1">Always Evolving</h3>
+            <p class="text-xs text-gray-400 leading-relaxed">Built on the Python ecosystem. Extend capabilities with any PyPI package — if Python can do it, MutBot can too.</p>
+          </div>
+        </div>
       </div>
     </div>
-  </section>
-
-  <!-- Features -->
-  <section class="pb-24 px-6">
-    <div class="max-w-5xl mx-auto grid grid-cols-1 md:grid-cols-3 gap-6">
-      <div class="bg-gray-900/50 border border-white/5 rounded-xl p-6">
-        <div class="w-10 h-10 rounded-lg bg-violet-500/10 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5 text-violet-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M12 3c.132 0 .263 0 .393 0a7.5 7.5 0 007.92 12.446A9 9 0 1112 2.992z"></path>
-          </svg>
-        </div>
-        <h3 class="text-lg font-semibold mb-2">You Define</h3>
-        <p class="text-sm text-gray-400 leading-relaxed">
-          Shape your AI's behavior through natural conversation. Your preferences become its instincts.
-        </p>
-      </div>
-
-      <div class="bg-gray-900/50 border border-white/5 rounded-xl p-6">
-        <div class="w-10 h-10 rounded-lg bg-emerald-500/10 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"></path>
-          </svg>
-        </div>
-        <h3 class="text-lg font-semibold mb-2">Always Evolving</h3>
-        <p class="text-sm text-gray-400 leading-relaxed">
-          Learns and adapts as you work. The more you use it, the better it understands you.
-        </p>
-      </div>
-
-      <div class="bg-gray-900/50 border border-white/5 rounded-xl p-6">
-        <div class="w-10 h-10 rounded-lg bg-sky-500/10 flex items-center justify-center mb-4">
-          <svg class="w-5 h-5 text-sky-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-            <rect x="2" y="2" width="20" height="20" rx="5"></rect>
-            <path d="M12 8v4l3 3"></path>
-          </svg>
-        </div>
-        <h3 class="text-lg font-semibold mb-2">Fully Local</h3>
-        <p class="text-sm text-gray-400 leading-relaxed">
-          Runs entirely on your machine. Your data never leaves your device. Fully private.
-        </p>
-      </div>
-    </div>
-  </section>
+  </main>
 
   <!-- Footer -->
   <footer class="border-t border-white/5 py-8 px-6">
@@ -114,19 +178,5 @@
 </div>
 
 <script>
-  const btn = document.getElementById("copy-btn")!;
-  const copyIcon = document.getElementById("copy-icon")!;
-  const checkIcon = document.getElementById("check-icon")!;
-
-  btn.addEventListener("click", async () => {
-    await navigator.clipboard.writeText(
-      "curl -LsSf https://mutbot.ai/install.sh | sh"
-    );
-    copyIcon.classList.add("hidden");
-    checkIcon.classList.remove("hidden");
-    setTimeout(() => {
-      checkIcon.classList.add("hidden");
-      copyIcon.classList.remove("hidden");
-    }, 2000);
-  });
+  import "../scripts/launcher";
 </script>

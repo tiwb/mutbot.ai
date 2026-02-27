@@ -244,45 +244,12 @@ jobs:
 
 ## 7. 安装脚本
 
-### install.sh (Linux/macOS)
+安装脚本已独立为单独的设计文档，详见 [`feature-install-scripts.md`](feature-install-scripts.md)。
 
-```bash
-#!/bin/sh
-set -eu
-
-echo "Installing MutBot..."
-
-# Install uv if not present
-if ! command -v uv >/dev/null 2>&1; then
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh
-    export PATH="$HOME/.local/bin:$PATH"
-fi
-
-# Install mutbot via uv (auto-downloads Python if needed)
-uv tool install mutbot
-
-echo ""
-echo "Done! Run 'mutbot' to start, then open https://mutbot.ai"
-```
-
-### install.ps1 (Windows)
-
-```powershell
-Write-Host "Installing MutBot..."
-
-# Install uv if not present
-if (-not (Get-Command uv -ErrorAction SilentlyContinue)) {
-    Write-Host "Installing uv..."
-    irm https://astral.sh/uv/install.ps1 | iex
-}
-
-# Install mutbot
-uv tool install mutbot
-
-Write-Host ""
-Write-Host "Done! Run 'mutbot' to start, then open https://mutbot.ai"
-```
+核心变更：
+- 使用 uv 作为安装工具（自动安装 uv + `uv tool install mutbot`）
+- 脚本同时负责安装和启动，可重复运行
+- mutbot 运行在 uv 管理的隔离环境中
 
 ## 8. 实施步骤清单
 
@@ -313,17 +280,12 @@ Write-Host "Done! Run 'mutbot' to start, then open https://mutbot.ai"
   - [x] 响应式适配
   - 状态：✅ 已完成
 
-### 阶段三：Launcher 逻辑 [待开始]
-- [ ] **Task 3.1**: 本地检测
-  - [ ] `launcher.ts`：fetch localhost:8741/api/health
-  - [ ] 检测成功 → 重定向到 localhost（Phase 1 简化版）
-  - [ ] 检测失败 → 展示 Landing
-  - [ ] 手动连接按钮（Firefox/Safari 用户）
-  - 状态：⏸️ 待开始
+### 阶段三：Launcher 逻辑 [✅ 已完成]
+- [x] **Task 3.1**: 本地检测
+  - [x] 已由 [`feature-workspace-selector.md`](feature-workspace-selector.md) 覆盖实现（WebSocket 连接检测）
+  - 状态：✅ 已完成
 
-### 阶段四：安装脚本 [待开始]
-- [ ] **Task 4.1**: 编写安装脚本
-  - [ ] `public/install.sh`
-  - [ ] `public/install.ps1`
-  - [ ] 测试各平台
-  - 状态：⏸️ 待开始
+### 阶段四：安装脚本 [✅ 已完成]
+- [x] **Task 4.1**: 编写安装脚本
+  - [x] 已独立为 [`feature-install-scripts.md`](feature-install-scripts.md) 重新设计并实施
+  - 状态：✅ 已完成
