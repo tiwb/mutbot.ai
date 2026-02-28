@@ -138,6 +138,80 @@ function redirectToLocal(workspaceName?: string) {
 }
 
 // ---------------------------------------------------------------------------
+// 右键菜单（workspace 删除）
+// ---------------------------------------------------------------------------
+
+/** 当前活跃的右键菜单，用于关闭 */
+let activeContextMenu: HTMLElement | null = null;
+
+function closeContextMenu() {
+  if (activeContextMenu) {
+    activeContextMenu.remove();
+    activeContextMenu = null;
+  }
+}
+
+function showWorkspaceContextMenu(
+  e: MouseEvent,
+  ws: Workspace,
+  rpc: RpcConnection,
+  onRemoved: (wsId: string) => void,
+) {
+  e.preventDefault();
+  closeContextMenu();
+
+  const menu = document.createElement("div");
+  menu.className = "ctx-menu";
+  menu.style.top = `${e.clientY}px`;
+  menu.style.left = `${e.clientX}px`;
+  menu.innerHTML = `
+    <button class="ctx-menu-item ctx-menu-danger">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+      </svg>
+      <span>Remove</span>
+    </button>`;
+
+  document.body.appendChild(menu);
+  activeContextMenu = menu;
+
+  // 边界检测
+  const rect = menu.getBoundingClientRect();
+  if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
+  if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
+
+  menu.querySelector(".ctx-menu-item")!.addEventListener("click", async () => {
+    closeContextMenu();
+    if (!confirm(`Remove workspace "${ws.name}" from list?`)) return;
+    try {
+      await rpc.call("workspace.remove", { workspace_id: ws.id });
+      onRemoved(ws.id);
+    } catch {
+      // 静默处理
+    }
+  });
+
+  // 点击外部或 Escape 关闭
+  const closeHandler = (ev: PointerEvent) => {
+    if (!menu.contains(ev.target as Node)) {
+      closeContextMenu();
+      document.removeEventListener("pointerdown", closeHandler);
+    }
+  };
+  const escHandler = (ev: KeyboardEvent) => {
+    if (ev.key === "Escape") {
+      closeContextMenu();
+      document.removeEventListener("keydown", escHandler);
+    }
+  };
+  // 延迟一帧注册，避免立即触发
+  requestAnimationFrame(() => {
+    document.addEventListener("pointerdown", closeHandler);
+    document.addEventListener("keydown", escHandler);
+  });
+}
+
+// ---------------------------------------------------------------------------
 // 状态更新
 // ---------------------------------------------------------------------------
 
@@ -185,59 +259,89 @@ function showWorkspaces(workspaces: Workspace[], rpc: RpcConnection) {
   const wsArea = document.getElementById("ws-area")!;
   const newBtn = document.getElementById("new-ws-btn")!;
 
+  // 本地 workspaces 副本（用于删除后更新）
+  let wsList = [...workspaces];
+
   // 显示 New 按钮并绑定事件
   newBtn.classList.remove("hidden");
-  newBtn.addEventListener("click", () => openDirectoryPicker(rpc));
+  // 移除旧的 listener（防止 retryConnect 重复绑定）
+  const newBtnClone = newBtn.cloneNode(true) as HTMLElement;
+  newBtn.replaceWith(newBtnClone);
+  newBtnClone.addEventListener("click", () => openDirectoryPicker(rpc));
 
-  if (workspaces.length === 0) {
-    wsArea.innerHTML = `
-      <p class="ws-status empty">No workspaces yet — create one to get started</p>`;
-    return;
+  function render() {
+    if (wsList.length === 0) {
+      wsArea.innerHTML = `
+        <p class="ws-status empty">No workspaces yet — create one to get started</p>`;
+      return;
+    }
+
+    const visible = wsList.slice(0, MAX_VISIBLE);
+    const hasMore = wsList.length > MAX_VISIBLE;
+
+    const items = visible
+      .map(
+        (ws) => `
+      <button class="ws-item" data-name="${ws.name}" data-id="${ws.id}">
+        <svg class="ws-item-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+        </svg>
+        <span class="ws-item-name">${ws.name}</span>
+        <span class="ws-item-path">${shortenPath(ws.project_path)}</span>
+      </button>`
+      )
+      .join("");
+
+    const moreBtn = hasMore
+      ? `<button class="ws-more" id="ws-more-btn">More...</button>`
+      : "";
+
+    wsArea.innerHTML = `<div class="ws-list">${items}</div>${moreBtn}`;
+
+    // 工作区点击
+    wsArea.querySelectorAll(".ws-item").forEach((btn) => {
+      const el = btn as HTMLElement;
+      el.addEventListener("click", () => {
+        const name = el.dataset.name;
+        if (name) redirectToLocal(name);
+      });
+      // 右键菜单
+      el.addEventListener("contextmenu", (ev) => {
+        const wsId = el.dataset.id!;
+        const ws = wsList.find((w) => w.id === wsId);
+        if (!ws) return;
+        showWorkspaceContextMenu(ev as MouseEvent, ws, rpc, (removedId) => {
+          wsList = wsList.filter((w) => w.id !== removedId);
+          render();
+        });
+      });
+    });
+
+    // More... 弹出搜索对话框
+    if (hasMore) {
+      document.getElementById("ws-more-btn")!.addEventListener("click", () => {
+        openWorkspaceSearch(wsList, rpc, (removedId) => {
+          wsList = wsList.filter((w) => w.id !== removedId);
+          render();
+        });
+      });
+    }
   }
 
-  const visible = workspaces.slice(0, MAX_VISIBLE);
-  const hasMore = workspaces.length > MAX_VISIBLE;
-
-  const items = visible
-    .map(
-      (ws) => `
-    <button class="ws-item" data-name="${ws.name}">
-      <svg class="ws-item-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-      </svg>
-      <span class="ws-item-name">${ws.name}</span>
-      <span class="ws-item-path">${shortenPath(ws.project_path)}</span>
-    </button>`
-    )
-    .join("");
-
-  const moreBtn = hasMore
-    ? `<button class="ws-more" id="ws-more-btn">More...</button>`
-    : "";
-
-  wsArea.innerHTML = `<div class="ws-list">${items}</div>${moreBtn}`;
-
-  // 工作区点击
-  wsArea.querySelectorAll(".ws-item").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const name = (btn as HTMLElement).dataset.name;
-      if (name) redirectToLocal(name);
-    });
-  });
-
-  // More... 弹出搜索对话框
-  if (hasMore) {
-    document.getElementById("ws-more-btn")!.addEventListener("click", () => {
-      openWorkspaceSearch(workspaces);
-    });
-  }
+  render();
 }
 
 // ---------------------------------------------------------------------------
 // 工作区搜索对话框
 // ---------------------------------------------------------------------------
 
-function openWorkspaceSearch(workspaces: Workspace[]) {
+function openWorkspaceSearch(
+  workspaces: Workspace[],
+  rpc: RpcConnection,
+  onRemoved: (wsId: string) => void,
+) {
+  let wsList = [...workspaces];
+
   const overlay = document.createElement("div");
   overlay.className = "ws-search-overlay";
   overlay.innerHTML = `
@@ -259,7 +363,7 @@ function openWorkspaceSearch(workspaces: Workspace[]) {
 
   function render(query: string) {
     const q = query.toLowerCase();
-    const filtered = workspaces.filter(
+    const filtered = wsList.filter(
       (ws) =>
         !q ||
         ws.name.toLowerCase().includes(q) ||
@@ -274,7 +378,7 @@ function openWorkspaceSearch(workspaces: Workspace[]) {
     listDiv.innerHTML = filtered
       .map(
         (ws) => `
-      <button class="ws-search-item" data-name="${ws.name}">
+      <button class="ws-search-item" data-name="${ws.name}" data-id="${ws.id}">
         <span class="ws-search-item-name">${ws.name}</span>
         <span class="ws-search-item-path">${shortenPath(ws.project_path)}</span>
       </button>`
@@ -282,12 +386,24 @@ function openWorkspaceSearch(workspaces: Workspace[]) {
       .join("");
 
     listDiv.querySelectorAll(".ws-search-item").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        const name = (btn as HTMLElement).dataset.name;
+      const el = btn as HTMLElement;
+      el.addEventListener("click", () => {
+        const name = el.dataset.name;
         if (name) {
           overlay.remove();
           redirectToLocal(name);
         }
+      });
+      // 右键菜单
+      el.addEventListener("contextmenu", (ev) => {
+        const wsId = el.dataset.id!;
+        const ws = wsList.find((w) => w.id === wsId);
+        if (!ws) return;
+        showWorkspaceContextMenu(ev as MouseEvent, ws, rpc, (removedId) => {
+          wsList = wsList.filter((w) => w.id !== removedId);
+          onRemoved(removedId);
+          render(input.value);
+        });
       });
     });
   }
@@ -305,7 +421,7 @@ function openWorkspaceSearch(workspaces: Workspace[]) {
 }
 
 // ---------------------------------------------------------------------------
-// 目录选择器（跨域）
+// New Workspace 对话框
 // ---------------------------------------------------------------------------
 
 let currentRpc: RpcConnection | null = null;
@@ -317,9 +433,12 @@ function openDirectoryPicker(rpc: RpcConnection) {
   overlay.className = "dp-overlay";
   overlay.innerHTML = `
     <div class="dp-dialog">
-      <h3 class="dp-title">Select Project Directory</h3>
-      <div class="dp-path-bar">
-        <button id="dp-path" class="dp-path">Loading...</button>
+      <h3 class="dp-title">New Workspace</h3>
+      <div class="dp-name-row">
+        <input id="dp-name" class="dp-name-input" type="text" placeholder="Workspace name (optional)" />
+      </div>
+      <div id="dp-path-bar" class="dp-path-bar">
+        <button id="dp-path" class="dp-path" title="Click to enter path manually">Loading...</button>
       </div>
       <div id="dp-error" class="dp-error hidden"></div>
       <div id="dp-entries" class="dp-entries">
@@ -327,7 +446,7 @@ function openDirectoryPicker(rpc: RpcConnection) {
       </div>
       <div class="dp-actions">
         <button id="dp-cancel" class="dp-btn-secondary">Cancel</button>
-        <button id="dp-select" class="dp-btn-primary">Select</button>
+        <button id="dp-select" class="dp-btn-primary">Create</button>
       </div>
     </div>`;
 
@@ -336,9 +455,48 @@ function openDirectoryPicker(rpc: RpcConnection) {
   let currentPath = "";
   let parentPath: string | null = null;
 
+  const nameInput = overlay.querySelector("#dp-name") as HTMLInputElement;
+  const pathBar = overlay.querySelector("#dp-path-bar") as HTMLDivElement;
   const pathBtn = overlay.querySelector("#dp-path") as HTMLButtonElement;
   const entriesDiv = overlay.querySelector("#dp-entries") as HTMLDivElement;
   const errorDiv = overlay.querySelector("#dp-error") as HTMLDivElement;
+
+  /** 切换为手动输入路径模式 */
+  function enterManualInput() {
+    pathBar.innerHTML = `
+      <div class="dp-input-row">
+        <input class="dp-input" type="text" value="${currentPath.replace(/"/g, "&quot;")}" />
+        <button class="dp-btn-sm">Go</button>
+      </div>`;
+    const input = pathBar.querySelector(".dp-input") as HTMLInputElement;
+    const goBtn = pathBar.querySelector(".dp-btn-sm") as HTMLButtonElement;
+    input.focus();
+    input.select();
+
+    function commitPath() {
+      const val = input.value.trim();
+      if (val) {
+        exitManualInput();
+        browse(val);
+      }
+    }
+
+    goBtn.addEventListener("click", commitPath);
+    input.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") commitPath();
+      if (e.key === "Escape") exitManualInput();
+    });
+  }
+
+  /** 退出手动输入，恢复按钮显示 */
+  function exitManualInput() {
+    pathBar.innerHTML = `<button id="dp-path" class="dp-path" title="Click to enter path manually">${currentPath || "..."}</button>`;
+    const newBtn = pathBar.querySelector("#dp-path") as HTMLButtonElement;
+    newBtn.addEventListener("click", () => enterManualInput());
+  }
+
+  // 初始绑定路径按钮点击
+  pathBtn.addEventListener("click", () => enterManualInput());
 
   async function browse(path: string) {
     entriesDiv.innerHTML = `<div class="dp-loading">Loading...</div>`;
@@ -355,7 +513,14 @@ function openDirectoryPicker(rpc: RpcConnection) {
       }
       currentPath = result.path;
       parentPath = result.parent;
-      pathBtn.textContent = currentPath;
+      // 更新路径按钮（可能处于手动输入状态）
+      exitManualInput();
+
+      // 更新 name placeholder
+      const dirName = currentPath.split(/[/\\]/).filter(Boolean).pop() || "";
+      nameInput.placeholder = dirName
+        ? `Workspace name (default: ${dirName})`
+        : "Workspace name (optional)";
 
       let html = "";
       if (parentPath) {
@@ -386,15 +551,12 @@ function openDirectoryPicker(rpc: RpcConnection) {
   // 初始加载
   browse("");
 
-  // Cancel
+  // Cancel（只通过按钮关闭，不通过 overlay 点击）
   overlay.querySelector("#dp-cancel")!.addEventListener("click", () => {
     overlay.remove();
   });
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) overlay.remove();
-  });
 
-  // Select
+  // Create
   overlay.querySelector("#dp-select")!.addEventListener("click", async () => {
     if (!currentPath) return;
     const selectBtn = overlay.querySelector("#dp-select") as HTMLButtonElement;
@@ -403,15 +565,19 @@ function openDirectoryPicker(rpc: RpcConnection) {
     errorDiv.classList.add("hidden");
 
     try {
+      const params: Record<string, unknown> = { project_path: currentPath };
+      const name = nameInput.value.trim();
+      if (name) params.name = name;
+
       const ws = await rpc.call<Workspace & { error?: string }>(
         "workspace.create",
-        { project_path: currentPath }
+        params,
       );
       if (ws.error) {
         errorDiv.textContent = ws.error;
         errorDiv.classList.remove("hidden");
         selectBtn.disabled = false;
-        selectBtn.textContent = "Select";
+        selectBtn.textContent = "Create";
         return;
       }
       overlay.remove();
@@ -420,7 +586,7 @@ function openDirectoryPicker(rpc: RpcConnection) {
       errorDiv.textContent = String(e);
       errorDiv.classList.remove("hidden");
       selectBtn.disabled = false;
-      selectBtn.textContent = "Select";
+      selectBtn.textContent = "Create";
     }
   });
 }
