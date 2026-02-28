@@ -22,6 +22,16 @@ const {
     <meta property="og:url" content="https://mutbot.ai" />
     <link rel="canonical" href="https://mutbot.ai" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script is:inline>
+      // 内联在 <head>，DOM 渲染前执行 — 有 hash 时隐藏 landing 显示 app
+      if (location.hash && location.hash.length > 1) {
+        document.documentElement.classList.add('app-mode');
+      }
+    </script>
+    <style is:inline>
+      .app-mode #landing { display: none !important; }
+      .app-mode #app { display: flex !important; min-height: 100vh; }
+    </style>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link

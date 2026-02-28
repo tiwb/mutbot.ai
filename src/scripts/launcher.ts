@@ -2,15 +2,36 @@
  * Launcher — mutbot.ai 连接本地 MutBot 的核心逻辑。
  *
  * 流程：
- * 1. 连接 ws://localhost:8741/ws/app
+ * 1. 并行：fetch /versions.json + WebSocket ws://localhost:8741/ws/app
  * 2. 连接成功 → workspace.list → 填充列表 + 显示 New Workspace
- * 3. 连接失败 → 显示安装引导
- * 4. hash 路由 → 自动重定向到 localhost
+ * 3. 打开工作区时版本匹配 → Level 1（动态加载 React）或 Level 3（重定向 localhost）
+ * 4. 连接失败 → 显示安装引导 + Level 3 链接
  */
 
 const MUTBOT_WS = "ws://localhost:8741/ws/app";
 const MUTBOT_LOCAL = "http://localhost:8741";
 const CONNECT_TIMEOUT = 3000;
+
+// ---------------------------------------------------------------------------
+// 版本信息
+// ---------------------------------------------------------------------------
+
+interface VersionEntry {
+  version: string;
+  entry: { js: string; css: string };
+}
+
+interface VersionsJson {
+  latest: string;
+  versions: VersionEntry[];
+}
+
+let localVersion: string | null = null;
+let versionsData: VersionsJson | null = null;
+
+function findVersion(version: string): VersionEntry | undefined {
+  return versionsData?.versions.find((v) => v.version === version);
+}
 
 // ---------------------------------------------------------------------------
 // RPC 通信
@@ -66,6 +87,13 @@ function connectLocal(): Promise<RpcConnection | null> {
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data as string);
+        // 捕获 welcome 事件中的版本号
+        if (msg.type === "event" && msg.event === "welcome") {
+          const data = msg.data as { version?: string };
+          if (data.version) {
+            localVersion = data.version;
+          }
+        }
         if (msg.type === "rpc_result") {
           const p = pending.get(msg.id);
           if (p) {
@@ -135,6 +163,46 @@ function redirectToLocal(workspaceName?: string) {
     ? `${MUTBOT_LOCAL}/#${workspaceName}`
     : MUTBOT_LOCAL;
   window.location.href = url;
+}
+
+// ---------------------------------------------------------------------------
+// 动态加载 React 前端
+// ---------------------------------------------------------------------------
+
+/** 打开工作区 — 所有路由决策在此发生 */
+function openWorkspace(name: string) {
+  if (localVersion && findVersion(localVersion)) {
+    location.hash = name;
+    loadReactForVersion(localVersion);
+  } else {
+    redirectToLocal(name);
+  }
+}
+
+/** 动态加载指定版本的 React 前端（从版本化子目录） */
+function loadReactForVersion(version: string) {
+  const ver = findVersion(version);
+  if (!ver) {
+    window.location.href = `${MUTBOT_LOCAL}/${location.hash}`;
+    return;
+  }
+
+  const base = `/v${ver.version}/`;
+
+  // 加载 CSS
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `${base}${ver.entry.css}`;
+  document.head.appendChild(link);
+
+  // 隐藏 landing，显示 app
+  document.documentElement.classList.add("app-mode");
+
+  // 加载 React 入口（ES module，import 自动相对于模块 URL 解析）
+  const script = document.createElement("script");
+  script.type = "module";
+  script.src = `${base}${ver.entry.js}`;
+  document.head.appendChild(script);
 }
 
 // ---------------------------------------------------------------------------
@@ -298,12 +366,12 @@ function showWorkspaces(workspaces: Workspace[], rpc: RpcConnection) {
 
     wsArea.innerHTML = `<div class="ws-list">${items}</div>${moreBtn}`;
 
-    // 工作区点击
+    // 工作区点击 — 通过 openWorkspace 做版本匹配决策
     wsArea.querySelectorAll(".ws-item").forEach((btn) => {
       const el = btn as HTMLElement;
       el.addEventListener("click", () => {
         const name = el.dataset.name;
-        if (name) redirectToLocal(name);
+        if (name) openWorkspace(name);
       });
       // 右键菜单
       el.addEventListener("contextmenu", (ev) => {
@@ -391,7 +459,7 @@ function openWorkspaceSearch(
         const name = el.dataset.name;
         if (name) {
           overlay.remove();
-          redirectToLocal(name);
+          openWorkspace(name);
         }
       });
       // 右键菜单
@@ -581,7 +649,7 @@ function openDirectoryPicker(rpc: RpcConnection) {
         return;
       }
       overlay.remove();
-      redirectToLocal(ws.name);
+      openWorkspace(ws.name);
     } catch (e) {
       errorDiv.textContent = String(e);
       errorDiv.classList.remove("hidden");
@@ -653,30 +721,51 @@ async function init() {
   initPlatformTabs();
   initCopyButtons();
 
-  const targetWs = location.hash.replace(/^#\/?/, "");
+  const hashWs = location.hash.replace(/^#\/?/, "");
 
   setConnecting();
 
-  const rpc = await connectLocal();
+  // 并行获取：versions.json + WebSocket 连接
+  const [versions, rpc] = await Promise.all([
+    fetch("/versions.json")
+      .then((r) => (r.ok ? r.json() : null))
+      .catch(() => null) as Promise<VersionsJson | null>,
+    connectLocal(),
+  ]);
+  versionsData = versions;
 
   if (!rpc) {
+    // 有 hash 且无连接 → 移除 app-mode（如果有的话），显示 landing
+    document.documentElement.classList.remove("app-mode");
     setDisconnected();
     return;
   }
 
   try {
     const workspaces = await rpc.call<Workspace[]>("workspace.list");
-    showWorkspaces(workspaces, rpc);
 
-    // 有目标工作区 → 自动重定向
-    if (targetWs) {
-      const match = workspaces.find((ws) => ws.name === targetWs);
+    // URL 已有 hash → 版本匹配后直接加载 React 或重定向
+    if (hashWs) {
+      const match = workspaces.find((ws) => ws.name === hashWs);
       if (match) {
-        redirectToLocal(targetWs);
-        return;
+        if (localVersion && findVersion(localVersion)) {
+          // Level 1：动态加载 React
+          loadReactForVersion(localVersion);
+          return;
+        } else {
+          // Level 3：重定向到 localhost
+          redirectToLocal(hashWs);
+          return;
+        }
       }
+      // hash 指向不存在的 workspace，清空 hash，正常显示 landing
+      location.hash = "";
+      document.documentElement.classList.remove("app-mode");
     }
+
+    showWorkspaces(workspaces, rpc);
   } catch {
+    document.documentElement.classList.remove("app-mode");
     setDisconnected();
   }
 }
