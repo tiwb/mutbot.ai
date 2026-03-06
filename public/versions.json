@@ -1,5 +1,5 @@
 {
-  "latest": "0.4.0",
+  "latest": "0.4.1",
   "versions": [
     {
       "version": "0.2.0",
@@ -35,6 +35,14 @@
     },
     {
       "version": "0.4.0",
+      "date": "2026-03-06",
+      "entry": {
+        "js": "assets/index-D5k7sZVZ.js",
+        "css": "assets/index-CikbUs3v.css"
+      }
+    },
+    {
+      "version": "0.4.1",
       "date": "2026-03-06",
       "entry": {
         "js": "assets/index-D5k7sZVZ.js",
