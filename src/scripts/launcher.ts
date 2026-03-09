@@ -278,7 +278,8 @@ function redirectToServer(server: ServerEntry, workspaceName?: string) {
 }
 
 function openWorkspace(name: string, server: ServerEntry, version: string | null) {
-  location.hash = buildHash(name, server.label);
+  // replaceState: 不创建历史条目，由 React SPA 统一管理 history
+  history.replaceState(null, "", "#" + buildHash(name, server.label));
   if (version && findVersion(version)) {
     loadReactForVersion(version, server);
   } else {
@@ -300,6 +301,7 @@ function loadReactForVersion(version: string, server: ServerEntry) {
   (window as any).__MUTBOT_CONTEXT__ = {
     remote: true,
     wsBase: `${wsProtocol}//${url.host}`,
+    workspace: location.hash.replace(/^#\/?/, "").split("@")[0],
   };
 
   const link = document.createElement("link");
@@ -1151,6 +1153,12 @@ async function init() {
   initPlatformTabs();
   initCopyButtons();
 
+  // Back/forward 时 reload，确保 launcher 重新初始化
+  // （后退：清除动态注入的 SPA 状态；前进：重新加载 workspace）
+  window.addEventListener("popstate", () => {
+    location.reload();
+  });
+
   // 加载版本信息
   versionsData = await fetch("/versions.json")
     .then((r) => (r.ok ? r.json() : null))
@@ -1190,8 +1198,7 @@ async function handleHashRoute(route: HashRoute, servers: ServerEntry[]) {
           const match = workspaces.find((ws) => ws.name === route.workspace);
           if (match) {
             targetServer = srv;
-            // 更新 hash 加上 server label
-            location.hash = buildHash(route.workspace, srv.label);
+            history.replaceState(null, "", "#" + buildHash(route.workspace, srv.label));
             if (result.version && findVersion(result.version)) {
               loadReactForVersion(result.version, srv);
             } else {
