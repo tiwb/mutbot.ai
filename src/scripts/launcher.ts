@@ -189,6 +189,12 @@ function loadReactForVersion(version: string) {
 
   const base = `/v${ver.version}/`;
 
+  // 注入上下文配置，让 React 应用识别 mutbot.ai 远程加载模式
+  (window as any).__MUTBOT_CONTEXT__ = {
+    remote: true,
+    wsBase: "ws://localhost:8741",
+  };
+
   // 加载 CSS
   const link = document.createElement("link");
   link.rel = "stylesheet";
