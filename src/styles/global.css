@@ -642,3 +642,112 @@
   color: #60a5fa;
   text-decoration: underline;
 }
+
+/* ===================================================================
+   Server sections (lightweight section headers, not cards)
+   =================================================================== */
+
+.srv-section {
+  margin-bottom: 12px;
+}
+
+.srv-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 0;
+  cursor: default;
+  user-select: none;
+}
+
+.srv-icon {
+  flex-shrink: 0;
+}
+
+.srv-icon.srv-online { color: #22c55e; }
+.srv-icon.srv-connecting { color: #eab308; animation: srv-pulse 1.2s ease-in-out infinite; }
+.srv-icon.srv-offline { color: #737373; }
+
+@keyframes srv-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+
+.srv-label {
+  font-weight: 600;
+  font-size: 13px;
+  color: #e5e5e5;
+}
+
+.srv-url {
+  font-size: 12px;
+  color: #737373;
+}
+
+.srv-version {
+  font-size: 12px;
+  color: #858585;
+  margin-left: auto;
+}
+
+.srv-new-ws-btn {
+  opacity: 0;
+  transition: opacity 0.15s;
+  background: none;
+  border: 1px solid #525252;
+  border-radius: 4px;
+  color: #a3a3a3;
+  font-size: 14px;
+  line-height: 1;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  margin-left: 6px;
+  flex-shrink: 0;
+}
+
+.srv-header:hover .srv-new-ws-btn {
+  opacity: 1;
+}
+
+.srv-new-ws-btn:hover {
+  color: #e5e5e5;
+  border-color: #737373;
+}
+
+.srv-body {
+  margin-top: 2px;
+}
+
+.srv-offline-msg {
+  font-size: 13px;
+  color: #858585;
+  padding: 2px 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.srv-try-open {
+  color: #3b82f6;
+  text-decoration: none;
+  font-size: 13px;
+}
+
+.srv-try-open:hover {
+  color: #60a5fa;
+  text-decoration: underline;
+}
+
+/* Server dialog */
+.srv-test-result {
+  font-size: 12px;
+  color: #858585;
+  margin-top: 8px;
+  padding: 6px 10px;
+  background: #262626;
+  border-radius: 4px;
+}

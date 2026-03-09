@@ -1,16 +1,17 @@
 /**
- * Launcher — mutbot.ai 连接本地 MutBot 的核心逻辑。
+ * Launcher — mutbot.ai 多服务器连接核心逻辑。
  *
  * 流程：
- * 1. 并行：fetch /versions.json + WebSocket ws://localhost:8741/ws/app
- * 2. 连接成功 → workspace.list → 填充列表 + 显示 New Workspace
- * 3. 打开工作区时版本匹配 → Level 1（动态加载 React）或 Level 3（重定向 localhost）
- * 4. 连接失败 → 显示安装引导 + Level 3 链接
+ * 1. 从 localStorage 读取服务器列表（首次访问自动初始化 localhost:8741）
+ * 2. 检查 hash：
+ *    - 有 hash（#workspace@server）→ 直接连接目标服务器 → Level 1 或 Level 3
+ *    - 无 hash → Landing 页面：并行探测所有服务器 → 显示服务器卡片 + 工作区列表
+ * 3. 用户选择工作区 → 设置 hash → reload 进入单连接模式
  */
 
-const MUTBOT_WS = "ws://localhost:8741/ws/app";
-const MUTBOT_LOCAL = "http://localhost:8741";
 const CONNECT_TIMEOUT = 3000;
+const STORAGE_KEY = "mutbot:servers";
+const LABEL_PATTERN = /^[a-zA-Z0-9-]+$/;
 
 // ---------------------------------------------------------------------------
 // 版本信息
@@ -26,11 +27,106 @@ interface VersionsJson {
   versions: VersionEntry[];
 }
 
-let localVersion: string | null = null;
 let versionsData: VersionsJson | null = null;
 
 function findVersion(version: string): VersionEntry | undefined {
   return versionsData?.versions.find((v) => v.version === version);
+}
+
+// ---------------------------------------------------------------------------
+// 服务器数据模型 + localStorage
+// ---------------------------------------------------------------------------
+
+interface ServerEntry {
+  id: string;
+  label: string;
+  url: string;
+  lastVersion?: string;
+  lastConnectedAt?: string;
+}
+
+function loadServers(): ServerEntry[] {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    // 首次访问：初始化 localhost
+    const initial: ServerEntry[] = [
+      {
+        id: crypto.randomUUID(),
+        label: "local",
+        url: "http://localhost:8741",
+      },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(initial));
+    return initial;
+  }
+  try {
+    return JSON.parse(raw) as ServerEntry[];
+  } catch {
+    return [];
+  }
+}
+
+function saveServers(servers: ServerEntry[]) {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+}
+
+function addServer(servers: ServerEntry[], entry: ServerEntry): ServerEntry[] {
+  const updated = [...servers, entry];
+  saveServers(updated);
+  return updated;
+}
+
+function removeServer(servers: ServerEntry[], id: string): ServerEntry[] {
+  const updated = servers.filter((s) => s.id !== id);
+  saveServers(updated);
+  return updated;
+}
+
+function updateServer(servers: ServerEntry[], id: string, changes: Partial<ServerEntry>): ServerEntry[] {
+  const updated = servers.map((s) => (s.id === id ? { ...s, ...changes } : s));
+  saveServers(updated);
+  return updated;
+}
+
+function isLabelValid(label: string): boolean {
+  return label.length > 0 && LABEL_PATTERN.test(label);
+}
+
+function isLabelUnique(servers: ServerEntry[], label: string, excludeId?: string): boolean {
+  return !servers.some(
+    (s) => s.label.toLowerCase() === label.toLowerCase() && s.id !== excludeId,
+  );
+}
+
+function findServerByLabel(servers: ServerEntry[], label: string): ServerEntry | undefined {
+  return servers.find((s) => s.label.toLowerCase() === label.toLowerCase());
+}
+
+// ---------------------------------------------------------------------------
+// Hash 路由
+// ---------------------------------------------------------------------------
+
+interface HashRoute {
+  workspace: string;
+  serverLabel: string | null;
+}
+
+function parseHash(): HashRoute | null {
+  const raw = location.hash.replace(/^#\/?/, "");
+  if (!raw) return null;
+
+  const atIdx = raw.lastIndexOf("@");
+  if (atIdx > 0) {
+    return {
+      workspace: raw.slice(0, atIdx),
+      serverLabel: raw.slice(atIdx + 1),
+    };
+  }
+  return { workspace: raw, serverLabel: null };
+}
+
+function buildHash(workspace: string, serverLabel: string): string {
+  return `${workspace}@${serverLabel}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -44,9 +140,18 @@ interface RpcConnection {
 
 let rpcNextId = 1;
 
-function connectLocal(): Promise<RpcConnection | null> {
+interface ConnectResult {
+  rpc: RpcConnection;
+  version: string | null;
+}
+
+function connectServer(server: ServerEntry): Promise<ConnectResult | null> {
   return new Promise((resolve) => {
     let resolved = false;
+    const url = new URL(server.url);
+    const protocol = url.protocol === "https:" ? "wss:" : "ws:";
+    const wsUrl = `${protocol}//${url.host}/ws/app`;
+
     const timer = setTimeout(() => {
       if (!resolved) {
         resolved = true;
@@ -55,11 +160,12 @@ function connectLocal(): Promise<RpcConnection | null> {
       }
     }, CONNECT_TIMEOUT);
 
-    const ws = new WebSocket(MUTBOT_WS);
+    const ws = new WebSocket(wsUrl);
     const pending = new Map<
       string,
       { resolve: (v: unknown) => void; reject: (e: Error) => void }
     >();
+    let serverVersion: string | null = null;
 
     ws.onopen = () => {
       if (resolved) return;
@@ -81,17 +187,18 @@ function connectLocal(): Promise<RpcConnection | null> {
           ws.close();
         },
       };
-      resolve(rpc);
+      resolve({ rpc, version: serverVersion });
     };
 
     ws.onmessage = (evt) => {
       try {
         const msg = JSON.parse(evt.data as string);
-        // 捕获 welcome 事件中的版本号
         if (msg.type === "event" && msg.event === "welcome") {
           const data = msg.data as { version?: string };
           if (data.version) {
-            localVersion = data.version;
+            serverVersion = data.version;
+            // onopen 可能还没触发，version 会在 resolve 时传递
+            // 如果已经 resolve 了，需要补更新（但 onopen 总在 onmessage 之前？不一定）
           }
         }
         if (msg.type === "rpc_result") {
@@ -123,7 +230,7 @@ function connectLocal(): Promise<RpcConnection | null> {
 }
 
 // ---------------------------------------------------------------------------
-// DOM 操作
+// DOM 辅助
 // ---------------------------------------------------------------------------
 
 interface Workspace {
@@ -158,53 +265,49 @@ function shortenPath(path: string): string {
     .replace(/^\/Users\/[^/]+/, "~");
 }
 
-function redirectToLocal(workspaceName?: string) {
-  const url = workspaceName
-    ? `${MUTBOT_LOCAL}/#${workspaceName}`
-    : MUTBOT_LOCAL;
-  window.location.href = url;
-}
-
 // ---------------------------------------------------------------------------
 // 动态加载 React 前端
 // ---------------------------------------------------------------------------
 
-/** 打开工作区 — 所有路由决策在此发生 */
-function openWorkspace(name: string) {
-  if (localVersion && findVersion(localVersion)) {
-    location.hash = name;
-    loadReactForVersion(localVersion);
+function redirectToServer(server: ServerEntry, workspaceName?: string) {
+  const url = workspaceName
+    ? `${server.url}/#${workspaceName}`
+    : server.url;
+  window.location.replace(url);
+}
+
+function openWorkspace(name: string, server: ServerEntry, version: string | null) {
+  location.hash = buildHash(name, server.label);
+  if (version && findVersion(version)) {
+    loadReactForVersion(version, server);
   } else {
-    redirectToLocal(name);
+    redirectToServer(server, name);
   }
 }
 
-/** 动态加载指定版本的 React 前端（从版本化子目录） */
-function loadReactForVersion(version: string) {
+function loadReactForVersion(version: string, server: ServerEntry) {
   const ver = findVersion(version);
   if (!ver) {
-    window.location.href = `${MUTBOT_LOCAL}/${location.hash}`;
+    redirectToServer(server, location.hash.replace(/^#\/?/, "").split("@")[0]);
     return;
   }
 
   const base = `/v${ver.version}/`;
+  const url = new URL(server.url);
+  const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
 
-  // 注入上下文配置，让 React 应用识别 mutbot.ai 远程加载模式
   (window as any).__MUTBOT_CONTEXT__ = {
     remote: true,
-    wsBase: "ws://localhost:8741",
+    wsBase: `${wsProtocol}//${url.host}`,
   };
 
-  // 加载 CSS
   const link = document.createElement("link");
   link.rel = "stylesheet";
   link.href = `${base}${ver.entry.css}`;
   document.head.appendChild(link);
 
-  // 隐藏 landing，显示 app
   document.documentElement.classList.add("app-mode");
 
-  // 加载 React 入口（ES module，import 自动相对于模块 URL 解析）
   const script = document.createElement("script");
   script.type = "module";
   script.src = `${base}${ver.entry.js}`;
@@ -212,10 +315,9 @@ function loadReactForVersion(version: string) {
 }
 
 // ---------------------------------------------------------------------------
-// 右键菜单（workspace 删除）
+// 右键菜单
 // ---------------------------------------------------------------------------
 
-/** 当前活跃的右键菜单，用于关闭 */
 let activeContextMenu: HTMLElement | null = null;
 
 function closeContextMenu() {
@@ -225,11 +327,9 @@ function closeContextMenu() {
   }
 }
 
-function showWorkspaceContextMenu(
+function showContextMenu(
   e: MouseEvent,
-  ws: Workspace,
-  rpc: RpcConnection,
-  onRemoved: (wsId: string) => void,
+  items: { label: string; danger?: boolean; handler: () => void }[],
 ) {
   e.preventDefault();
   closeContextMenu();
@@ -238,34 +338,31 @@ function showWorkspaceContextMenu(
   menu.className = "ctx-menu";
   menu.style.top = `${e.clientY}px`;
   menu.style.left = `${e.clientX}px`;
-  menu.innerHTML = `
-    <button class="ctx-menu-item ctx-menu-danger">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-      </svg>
-      <span>Remove</span>
-    </button>`;
+
+  menu.innerHTML = items
+    .map(
+      (item, i) => `
+    <button class="ctx-menu-item${item.danger ? " ctx-menu-danger" : ""}" data-idx="${i}">
+      <span>${item.label}</span>
+    </button>`,
+    )
+    .join("");
 
   document.body.appendChild(menu);
   activeContextMenu = menu;
 
-  // 边界检测
   const rect = menu.getBoundingClientRect();
   if (rect.right > window.innerWidth) menu.style.left = `${window.innerWidth - rect.width - 4}px`;
   if (rect.bottom > window.innerHeight) menu.style.top = `${window.innerHeight - rect.height - 4}px`;
 
-  menu.querySelector(".ctx-menu-item")!.addEventListener("click", async () => {
-    closeContextMenu();
-    if (!confirm(`Remove workspace "${ws.name}" from list?`)) return;
-    try {
-      await rpc.call("workspace.remove", { workspace_id: ws.id });
-      onRemoved(ws.id);
-    } catch {
-      // 静默处理
-    }
+  menu.querySelectorAll(".ctx-menu-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const idx = parseInt((btn as HTMLElement).dataset.idx || "0");
+      closeContextMenu();
+      items[idx].handler();
+    });
   });
 
-  // 点击外部或 Escape 关闭
   const closeHandler = (ev: PointerEvent) => {
     if (!menu.contains(ev.target as Node)) {
       closeContextMenu();
@@ -278,7 +375,6 @@ function showWorkspaceContextMenu(
       document.removeEventListener("keydown", escHandler);
     }
   };
-  // 延迟一帧注册，避免立即触发
   requestAnimationFrame(() => {
     document.addEventListener("pointerdown", closeHandler);
     document.addEventListener("keydown", escHandler);
@@ -286,123 +382,441 @@ function showWorkspaceContextMenu(
 }
 
 // ---------------------------------------------------------------------------
-// 状态更新
+// 服务器管理对话框
 // ---------------------------------------------------------------------------
 
-function setConnecting() {
-  const wsArea = document.getElementById("ws-area")!;
-  wsArea.innerHTML = `<p class="ws-status connecting">Connecting to MutBot...</p>`;
-}
+function openServerDialog(
+  servers: ServerEntry[],
+  onSave: (servers: ServerEntry[]) => void,
+  existing?: ServerEntry,
+) {
+  const isEdit = !!existing;
+  const overlay = document.createElement("div");
+  overlay.className = "dp-overlay";
+  overlay.innerHTML = `
+    <div class="dp-dialog" style="max-width:400px">
+      <h3 class="dp-title">${isEdit ? "Edit Server" : "Add Server"}</h3>
+      <div class="dp-name-row">
+        <label class="srv-label">Name</label>
+        <input id="srv-name" class="dp-name-input" type="text"
+          placeholder="e.g. office" value="${existing?.label || ""}" />
+      </div>
+      <div class="dp-name-row" style="margin-top:8px">
+        <label class="srv-label">Address</label>
+        <input id="srv-url" class="dp-name-input" type="text"
+          placeholder="host:port (default port 8741)" value="${existing ? new URL(existing.url).host : ""}" />
+      </div>
+      <div id="srv-error" class="dp-error hidden"></div>
+      <div id="srv-test" class="srv-test-result hidden"></div>
+      <div class="dp-actions">
+        <button id="srv-cancel" class="dp-btn-secondary">Cancel</button>
+        <button id="srv-test-btn" class="dp-btn-secondary">Test</button>
+        <button id="srv-save" class="dp-btn-primary">Save</button>
+      </div>
+    </div>`;
 
-function setDisconnected() {
-  const wsArea = document.getElementById("ws-area")!;
+  document.body.appendChild(overlay);
 
-  if (isMobile()) {
-    wsArea.innerHTML = `
-      <div class="ws-status mobile-hint">
-        <p><strong>MutBot runs on your PC.</strong></p>
-        <p>Install it on a desktop computer, then use this page to connect remotely.</p>
-      </div>`;
-  } else {
-    wsArea.innerHTML = `
-      <p class="ws-status disconnected">Run MutBot locally to get started. Try<a href="#" id="ws-retry" class="ws-retry">Reconnect</a>
-      or<a href="http://localhost:8741" class="ws-action">Goto Local MutBot</a>.</p>`;
-    document.getElementById("ws-retry")!.addEventListener("click", (e) => {
-      e.preventDefault();
-      retryConnect();
-    });
+  const nameInput = overlay.querySelector("#srv-name") as HTMLInputElement;
+  const urlInput = overlay.querySelector("#srv-url") as HTMLInputElement;
+  const errorDiv = overlay.querySelector("#srv-error") as HTMLDivElement;
+  const testDiv = overlay.querySelector("#srv-test") as HTMLDivElement;
+
+  function showError(msg: string) {
+    errorDiv.textContent = msg;
+    errorDiv.classList.remove("hidden");
   }
-}
 
-async function retryConnect() {
-  setConnecting();
-  const rpc = await connectLocal();
-  if (!rpc) {
-    setDisconnected();
-    return;
+  function hideError() {
+    errorDiv.classList.add("hidden");
   }
-  try {
-    const workspaces = await rpc.call<Workspace[]>("workspace.list");
-    showWorkspaces(workspaces, rpc);
-  } catch {
-    setDisconnected();
+
+  function parseAddress(): string | null {
+    let addr = urlInput.value.trim();
+    if (!addr) { showError("Address is required"); return null; }
+
+    // 如果没有协议前缀，默认加 http://
+    if (!/^https?:\/\//i.test(addr)) {
+      addr = `http://${addr}`;
+    }
+    try {
+      const u = new URL(addr);
+      // 没有端口则默认 8741
+      if (!u.port) {
+        u.port = "8741";
+      }
+      return u.origin;
+    } catch {
+      showError("Invalid address");
+      return null;
+    }
   }
-}
 
-function showWorkspaces(workspaces: Workspace[], rpc: RpcConnection) {
-  const wsArea = document.getElementById("ws-area")!;
-  const newBtn = document.getElementById("new-ws-btn")!;
+  // Test
+  overlay.querySelector("#srv-test-btn")!.addEventListener("click", async () => {
+    hideError();
+    const urlStr = parseAddress();
+    if (!urlStr) return;
 
-  // 本地 workspaces 副本（用于删除后更新）
-  let wsList = [...workspaces];
+    testDiv.textContent = "Connecting...";
+    testDiv.classList.remove("hidden");
 
-  // 显示 New 按钮并绑定事件
-  newBtn.classList.remove("hidden");
-  // 移除旧的 listener（防止 retryConnect 重复绑定）
-  const newBtnClone = newBtn.cloneNode(true) as HTMLElement;
-  newBtn.replaceWith(newBtnClone);
-  newBtnClone.addEventListener("click", () => openDirectoryPicker(rpc));
+    const tempServer: ServerEntry = { id: "", label: "", url: urlStr };
+    const result = await connectServer(tempServer);
+    if (result) {
+      testDiv.textContent = `Connected — version ${result.version || "unknown"}`;
+      result.rpc.close();
+    } else {
+      testDiv.textContent = "Could not connect (you can still save)";
+    }
+  });
 
-  function render() {
-    if (wsList.length === 0) {
-      wsArea.innerHTML = `
-        <p class="ws-status empty">No workspaces yet — create one to get started</p>`;
+  // Save
+  overlay.querySelector("#srv-save")!.addEventListener("click", () => {
+    hideError();
+
+    const label = nameInput.value.trim();
+    const urlStr = parseAddress();
+    if (!urlStr) return;
+
+    // label 校验
+    if (!label) {
+      // 从地址自动生成
+      try {
+        const u = new URL(urlStr);
+        const autoLabel = u.hostname.replace(/\./g, "-");
+        nameInput.value = autoLabel;
+      } catch { /* ignore */ }
+      if (!nameInput.value.trim()) {
+        showError("Name is required");
+        return;
+      }
+    }
+
+    const finalLabel = nameInput.value.trim();
+    if (!isLabelValid(finalLabel)) {
+      showError("Name can only contain letters, numbers, and hyphens");
+      return;
+    }
+    if (!isLabelUnique(servers, finalLabel, existing?.id)) {
+      showError("A server with this name already exists");
       return;
     }
 
-    const visible = wsList.slice(0, MAX_VISIBLE);
-    const hasMore = wsList.length > MAX_VISIBLE;
+    if (isEdit && existing) {
+      const updated = updateServer(servers, existing.id, { label: finalLabel, url: urlStr });
+      onSave(updated);
+    } else {
+      const entry: ServerEntry = {
+        id: crypto.randomUUID(),
+        label: finalLabel,
+        url: urlStr,
+      };
+      const updated = addServer(servers, entry);
+      onSave(updated);
+    }
 
-    const items = visible
-      .map(
-        (ws) => `
-      <button class="ws-item" data-name="${ws.name}" data-id="${ws.id}">
-        <svg class="ws-item-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-        </svg>
-        <span class="ws-item-name">${ws.name}</span>
-        <span class="ws-item-path">${shortenPath(ws.project_path)}</span>
-      </button>`
-      )
+    overlay.remove();
+  });
+
+  // Cancel
+  overlay.querySelector("#srv-cancel")!.addEventListener("click", () => {
+    overlay.remove();
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Landing 页面：服务器列表 + 工作区
+// ---------------------------------------------------------------------------
+
+type ServerStatus = "connecting" | "online" | "offline";
+
+interface ServerState {
+  server: ServerEntry;
+  status: ServerStatus;
+  version: string | null;
+  rpc: RpcConnection | null;
+  workspaces: Workspace[];
+}
+
+function renderLanding(servers: ServerEntry[]) {
+  const wsArea = document.getElementById("ws-area")!;
+  const newBtn = document.getElementById("new-ws-btn")!;
+
+  // 改标题
+  const heading = document.querySelector(".section-heading") as HTMLElement;
+  if (heading && heading.textContent?.includes("Open Workspace")) {
+    heading.textContent = "2. Servers";
+  }
+
+  // 将 "+ New" 按钮改为 "+ Add"（添加服务器）
+  newBtn.textContent = "+ Add";
+  newBtn.classList.remove("hidden");
+  const addBtnClone = newBtn.cloneNode(true) as HTMLElement;
+  newBtn.replaceWith(addBtnClone);
+
+  let currentServers = [...servers];
+  const states = new Map<string, ServerState>();
+
+  // 初始化每个服务器的状态
+  for (const srv of currentServers) {
+    states.set(srv.id, {
+      server: srv,
+      status: "connecting",
+      version: null,
+      rpc: null,
+      workspaces: [],
+    });
+  }
+
+  function render() {
+    if (currentServers.length === 0) {
+      wsArea.innerHTML = `<p class="ws-status empty">No servers — click "+ Add" to add one</p>`;
+      return;
+    }
+
+    wsArea.innerHTML = currentServers
+      .map((srv) => {
+        const state = states.get(srv.id)!;
+        return renderServerCard(state);
+      })
       .join("");
 
-    const moreBtn = hasMore
-      ? `<button class="ws-more" id="ws-more-btn">More...</button>`
-      : "";
+    // 绑定事件
+    for (const srv of currentServers) {
+      const state = states.get(srv.id)!;
+      const card = wsArea.querySelector(`[data-server-id="${srv.id}"]`) as HTMLElement;
+      if (!card) continue;
 
-    wsArea.innerHTML = `<div class="ws-list">${items}</div>${moreBtn}`;
+      bindServerCardEvents(card, state);
+    }
+  }
 
-    // 工作区点击 — 通过 openWorkspace 做版本匹配决策
-    wsArea.querySelectorAll(".ws-item").forEach((btn) => {
+  function renderServerCard(state: ServerState): string {
+    const { server, status, version, workspaces } = state;
+    const statusClass =
+      status === "online" ? "srv-online" :
+      status === "connecting" ? "srv-connecting" :
+      "srv-offline";
+
+    const versionText = status === "online" ? (version || "") : "";
+
+    // 只有一个在线服务器时省略 header
+    const onlineCount = currentServers.filter(
+      (s) => states.get(s.id)?.status === "online",
+    ).length;
+    const hideHeader = currentServers.length === 1 && onlineCount === 1 && status === "online";
+
+    let body = "";
+
+    if (status === "online") {
+      if (workspaces.length === 0) {
+        body = `<p class="ws-status empty">No workspaces yet</p>`;
+      } else {
+        const visible = workspaces.slice(0, MAX_VISIBLE);
+        const hasMore = workspaces.length > MAX_VISIBLE;
+        body = `<div class="ws-list">${visible
+          .map(
+            (ws) => `
+          <button class="ws-item" data-name="${ws.name}" data-id="${ws.id}" data-server="${server.id}">
+            <svg class="ws-item-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <span class="ws-item-name">${ws.name}</span>
+            <span class="ws-item-path">${shortenPath(ws.project_path)}</span>
+          </button>`,
+          )
+          .join("")}${hasMore ? `<button class="ws-more" data-server="${server.id}">More...</button>` : ""}</div>`;
+      }
+    } else if (status === "offline") {
+      body = `
+        <div class="srv-offline-msg">
+          <span>Cannot connect.</span>
+          <a href="${server.url}" class="srv-try-open" target="_blank" rel="noopener">Open directly</a>
+        </div>`;
+    }
+    // connecting: body 为空，图标闪烁已暗示连接中
+
+    const monitorIcon = `<svg class="srv-icon ${statusClass}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
+
+    const headerHtml = hideHeader ? "" : `
+      <div class="srv-header" data-server-id="${server.id}">
+        ${monitorIcon}
+        <span class="srv-label">${server.label}</span>
+        <span class="srv-url">(${new URL(server.url).host})</span>
+        <span class="srv-version">${versionText}</span>
+        ${status === "online" ? `<button class="srv-new-ws-btn" data-server="${server.id}" title="New Workspace">+</button>` : ""}
+      </div>`;
+
+    return `
+      <div class="srv-section" data-server-id="${server.id}">
+        ${headerHtml}
+        <div class="srv-body">${body}</div>
+      </div>`;
+  }
+
+  function bindServerCardEvents(card: HTMLElement, state: ServerState) {
+    const { server, rpc, version } = state;
+
+    // 服务器 header 右键菜单
+    const header = card.querySelector(".srv-header") as HTMLElement | null;
+    if (header) {
+      header.addEventListener("contextmenu", (e) => {
+        showContextMenu(e as MouseEvent, [
+          { label: "Edit", handler: () => editServer(server) },
+          { label: "Reconnect", handler: () => reconnectServer(server.id) },
+          { label: "Remove", danger: true, handler: () => doRemoveServer(server) },
+        ]);
+      });
+    }
+
+    // 工作区点击
+    card.querySelectorAll(".ws-item").forEach((btn) => {
       const el = btn as HTMLElement;
       el.addEventListener("click", () => {
         const name = el.dataset.name;
-        if (name) openWorkspace(name);
+        if (name) {
+          closeAllConnections();
+          openWorkspace(name, server, version);
+        }
       });
-      // 右键菜单
       el.addEventListener("contextmenu", (ev) => {
+        if (!rpc) return;
         const wsId = el.dataset.id!;
-        const ws = wsList.find((w) => w.id === wsId);
+        const ws = state.workspaces.find((w) => w.id === wsId);
         if (!ws) return;
-        showWorkspaceContextMenu(ev as MouseEvent, ws, rpc, (removedId) => {
-          wsList = wsList.filter((w) => w.id !== removedId);
-          render();
-        });
+        showContextMenu(ev as MouseEvent, [
+          {
+            label: "Remove",
+            danger: true,
+            handler: async () => {
+              if (!confirm(`Remove workspace "${ws.name}" from list?`)) return;
+              try {
+                await rpc.call("workspace.remove", { workspace_id: ws.id });
+                state.workspaces = state.workspaces.filter((w) => w.id !== wsId);
+                render();
+              } catch { /* ignore */ }
+            },
+          },
+        ]);
       });
     });
 
-    // More... 弹出搜索对话框
-    if (hasMore) {
-      document.getElementById("ws-more-btn")!.addEventListener("click", () => {
-        openWorkspaceSearch(wsList, rpc, (removedId) => {
-          wsList = wsList.filter((w) => w.id !== removedId);
+    // More...
+    const moreBtn = card.querySelector(".ws-more") as HTMLElement | null;
+    if (moreBtn && rpc) {
+      moreBtn.addEventListener("click", () => {
+        openWorkspaceSearch(state.workspaces, rpc, server, version, (removedId) => {
+          state.workspaces = state.workspaces.filter((w) => w.id !== removedId);
           render();
         });
       });
     }
+
+    // + New Workspace (hover button in header)
+    const newWsBtn = card.querySelector(".srv-new-ws-btn") as HTMLElement | null;
+    if (newWsBtn && rpc) {
+      newWsBtn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        openDirectoryPicker(rpc, server, version);
+      });
+    }
   }
 
+  function closeAllConnections() {
+    for (const state of states.values()) {
+      if (state.rpc) {
+        state.rpc.close();
+        state.rpc = null;
+      }
+    }
+  }
+
+  function editServer(server: ServerEntry) {
+    openServerDialog(currentServers, (updated) => {
+      currentServers = updated;
+      // 更新 state 中的 server 引用
+      const state = states.get(server.id);
+      if (state) {
+        const newEntry = updated.find((s) => s.id === server.id);
+        if (newEntry) {
+          const urlChanged = newEntry.url !== state.server.url;
+          state.server = newEntry;
+          if (urlChanged) reconnectServer(server.id);
+        }
+      }
+      render();
+    }, server);
+  }
+
+  function doRemoveServer(server: ServerEntry) {
+    if (!confirm(`Remove server "${server.label}"?`)) return;
+    const state = states.get(server.id);
+    if (state?.rpc) state.rpc.close();
+    states.delete(server.id);
+    currentServers = removeServer(currentServers, server.id);
+    render();
+  }
+
+  async function reconnectServer(serverId: string) {
+    const state = states.get(serverId);
+    if (!state) return;
+
+    if (state.rpc) { state.rpc.close(); state.rpc = null; }
+    state.status = "connecting";
+    state.version = null;
+    state.workspaces = [];
+    render();
+
+    const result = await connectServer(state.server);
+    if (result) {
+      state.status = "online";
+      state.version = result.version;
+      state.rpc = result.rpc;
+      state.server.lastVersion = result.version || undefined;
+      state.server.lastConnectedAt = new Date().toISOString();
+      currentServers = updateServer(currentServers, serverId, {
+        lastVersion: state.server.lastVersion,
+        lastConnectedAt: state.server.lastConnectedAt,
+      });
+      try {
+        state.workspaces = await result.rpc.call<Workspace[]>("workspace.list");
+      } catch {
+        state.workspaces = [];
+      }
+    } else {
+      state.status = "offline";
+    }
+    render();
+  }
+
+  // + Add 按钮
+  addBtnClone.addEventListener("click", () => {
+    openServerDialog(currentServers, (updated) => {
+      const newEntry = updated.find(
+        (s) => !currentServers.some((cs) => cs.id === s.id),
+      );
+      currentServers = updated;
+      if (newEntry) {
+        states.set(newEntry.id, {
+          server: newEntry,
+          status: "connecting",
+          version: null,
+          rpc: null,
+          workspaces: [],
+        });
+        render();
+        reconnectServer(newEntry.id);
+      }
+    });
+  });
+
+  // 初始渲染 + 并行探测
   render();
+
+  for (const srv of currentServers) {
+    reconnectServer(srv.id);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -412,6 +826,8 @@ function showWorkspaces(workspaces: Workspace[], rpc: RpcConnection) {
 function openWorkspaceSearch(
   workspaces: Workspace[],
   rpc: RpcConnection,
+  server: ServerEntry,
+  version: string | null,
   onRemoved: (wsId: string) => void,
 ) {
   let wsList = [...workspaces];
@@ -441,7 +857,7 @@ function openWorkspaceSearch(
       (ws) =>
         !q ||
         ws.name.toLowerCase().includes(q) ||
-        ws.project_path.toLowerCase().includes(q)
+        ws.project_path.toLowerCase().includes(q),
     );
 
     if (filtered.length === 0) {
@@ -455,7 +871,7 @@ function openWorkspaceSearch(
       <button class="ws-search-item" data-name="${ws.name}" data-id="${ws.id}">
         <span class="ws-search-item-name">${ws.name}</span>
         <span class="ws-search-item-path">${shortenPath(ws.project_path)}</span>
-      </button>`
+      </button>`,
       )
       .join("");
 
@@ -465,19 +881,28 @@ function openWorkspaceSearch(
         const name = el.dataset.name;
         if (name) {
           overlay.remove();
-          openWorkspace(name);
+          openWorkspace(name, server, version);
         }
       });
-      // 右键菜单
       el.addEventListener("contextmenu", (ev) => {
         const wsId = el.dataset.id!;
         const ws = wsList.find((w) => w.id === wsId);
         if (!ws) return;
-        showWorkspaceContextMenu(ev as MouseEvent, ws, rpc, (removedId) => {
-          wsList = wsList.filter((w) => w.id !== removedId);
-          onRemoved(removedId);
-          render(input.value);
-        });
+        showContextMenu(ev as MouseEvent, [
+          {
+            label: "Remove",
+            danger: true,
+            handler: async () => {
+              if (!confirm(`Remove workspace "${ws.name}" from list?`)) return;
+              try {
+                await rpc.call("workspace.remove", { workspace_id: ws.id });
+                wsList = wsList.filter((w) => w.id !== wsId);
+                onRemoved(wsId);
+                render(input.value);
+              } catch { /* ignore */ }
+            },
+          },
+        ]);
       });
     });
   }
@@ -488,7 +913,6 @@ function openWorkspaceSearch(
     if (e.key === "Escape") overlay.remove();
   });
 
-  // 点击遮罩关闭
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) overlay.remove();
   });
@@ -498,11 +922,7 @@ function openWorkspaceSearch(
 // New Workspace 对话框
 // ---------------------------------------------------------------------------
 
-let currentRpc: RpcConnection | null = null;
-
-function openDirectoryPicker(rpc: RpcConnection) {
-  currentRpc = rpc;
-
+function openDirectoryPicker(rpc: RpcConnection, server: ServerEntry, version: string | null) {
   const overlay = document.createElement("div");
   overlay.className = "dp-overlay";
   overlay.innerHTML = `
@@ -535,7 +955,6 @@ function openDirectoryPicker(rpc: RpcConnection) {
   const entriesDiv = overlay.querySelector("#dp-entries") as HTMLDivElement;
   const errorDiv = overlay.querySelector("#dp-error") as HTMLDivElement;
 
-  /** 切换为手动输入路径模式 */
   function enterManualInput() {
     pathBar.innerHTML = `
       <div class="dp-input-row">
@@ -562,14 +981,12 @@ function openDirectoryPicker(rpc: RpcConnection) {
     });
   }
 
-  /** 退出手动输入，恢复按钮显示 */
   function exitManualInput() {
     pathBar.innerHTML = `<button id="dp-path" class="dp-path" title="Click to enter path manually">${currentPath || "..."}</button>`;
     const newBtn = pathBar.querySelector("#dp-path") as HTMLButtonElement;
     newBtn.addEventListener("click", () => enterManualInput());
   }
 
-  // 初始绑定路径按钮点击
   pathBtn.addEventListener("click", () => enterManualInput());
 
   async function browse(path: string) {
@@ -587,10 +1004,8 @@ function openDirectoryPicker(rpc: RpcConnection) {
       }
       currentPath = result.path;
       parentPath = result.parent;
-      // 更新路径按钮（可能处于手动输入状态）
       exitManualInput();
 
-      // 更新 name placeholder
       const dirName = currentPath.split(/[/\\]/).filter(Boolean).pop() || "";
       nameInput.placeholder = dirName
         ? `Workspace name (default: ${dirName})`
@@ -622,15 +1037,12 @@ function openDirectoryPicker(rpc: RpcConnection) {
     }
   }
 
-  // 初始加载
   browse("");
 
-  // Cancel（只通过按钮关闭，不通过 overlay 点击）
   overlay.querySelector("#dp-cancel")!.addEventListener("click", () => {
     overlay.remove();
   });
 
-  // Create
   overlay.querySelector("#dp-select")!.addEventListener("click", async () => {
     if (!currentPath) return;
     const selectBtn = overlay.querySelector("#dp-select") as HTMLButtonElement;
@@ -655,7 +1067,7 @@ function openDirectoryPicker(rpc: RpcConnection) {
         return;
       }
       overlay.remove();
-      openWorkspace(ws.name);
+      openWorkspace(ws.name, server, version);
     } catch (e) {
       errorDiv.textContent = String(e);
       errorDiv.classList.remove("hidden");
@@ -674,8 +1086,8 @@ function initPlatformTabs() {
   const panels = document.querySelectorAll<HTMLElement>(".install-panel");
   if (tabs.length === 0) return;
 
-  // 自动检测平台，默认选中对应 Shell 标签
-  const isWindows = /Win/i.test(navigator.platform) ||
+  const isWindows =
+    /Win/i.test(navigator.platform) ||
     (navigator as any).userAgentData?.platform === "Windows";
   const defaultTab = isWindows ? "windows" : "unix";
 
@@ -693,7 +1105,6 @@ function initPlatformTabs() {
     });
   });
 
-  // 显示默认面板
   panels.forEach((p) => p.classList.add("hidden"));
   const defaultPanel = document.getElementById(`install-${defaultTab}`);
   if (defaultPanel) defaultPanel.classList.remove("hidden");
@@ -727,52 +1138,76 @@ async function init() {
   initPlatformTabs();
   initCopyButtons();
 
-  const hashWs = location.hash.replace(/^#\/?/, "");
+  // 加载版本信息
+  versionsData = await fetch("/versions.json")
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null) as VersionsJson | null;
 
-  setConnecting();
+  const servers = loadServers();
+  const hashRoute = parseHash();
 
-  // 并行获取：versions.json + WebSocket 连接
-  const [versions, rpc] = await Promise.all([
-    fetch("/versions.json")
-      .then((r) => (r.ok ? r.json() : null))
-      .catch(() => null) as Promise<VersionsJson | null>,
-    connectLocal(),
-  ]);
-  versionsData = versions;
+  if (hashRoute) {
+    // Hash 有值 — 直接连接目标服务器，加载 React SPA
+    await handleHashRoute(hashRoute, servers);
+  } else {
+    // 无 hash — Landing 页面，显示服务器列表
+    renderLanding(servers);
+  }
+}
 
-  if (!rpc) {
-    // 有 hash 且无连接 → 移除 app-mode（如果有的话），显示 landing
+async function handleHashRoute(route: HashRoute, servers: ServerEntry[]) {
+  let targetServer: ServerEntry | undefined;
+
+  if (route.serverLabel) {
+    targetServer = findServerByLabel(servers, route.serverLabel);
+    if (!targetServer) {
+      // 未找到服务器，回退到 Landing
+      location.hash = "";
+      document.documentElement.classList.remove("app-mode");
+      renderLanding(servers);
+      return;
+    }
+  } else {
+    // 无 @server，向后兼容：逐个尝试连接，找第一个有该工作区的服务器
+    for (const srv of servers) {
+      const result = await connectServer(srv);
+      if (result) {
+        try {
+          const workspaces = await result.rpc.call<Workspace[]>("workspace.list");
+          const match = workspaces.find((ws) => ws.name === route.workspace);
+          if (match) {
+            targetServer = srv;
+            // 更新 hash 加上 server label
+            location.hash = buildHash(route.workspace, srv.label);
+            if (result.version && findVersion(result.version)) {
+              loadReactForVersion(result.version, srv);
+            } else {
+              redirectToServer(srv, route.workspace);
+            }
+            return;
+          }
+        } catch { /* ignore */ }
+        result.rpc.close();
+      }
+    }
+    // 没找到匹配的工作区，回退到 Landing
+    location.hash = "";
     document.documentElement.classList.remove("app-mode");
-    setDisconnected();
+    renderLanding(servers);
     return;
   }
 
-  try {
-    const workspaces = await rpc.call<Workspace[]>("workspace.list");
-
-    // URL 已有 hash → 版本匹配后直接加载 React 或重定向
-    if (hashWs) {
-      const match = workspaces.find((ws) => ws.name === hashWs);
-      if (match) {
-        if (localVersion && findVersion(localVersion)) {
-          // Level 1：动态加载 React
-          loadReactForVersion(localVersion);
-          return;
-        } else {
-          // Level 3：重定向到 localhost
-          redirectToLocal(hashWs);
-          return;
-        }
-      }
-      // hash 指向不存在的 workspace，清空 hash，正常显示 landing
-      location.hash = "";
-      document.documentElement.classList.remove("app-mode");
+  // 有明确的 server label，连接该服务器
+  const result = await connectServer(targetServer);
+  if (result) {
+    if (result.version && findVersion(result.version)) {
+      loadReactForVersion(result.version, targetServer);
+    } else {
+      redirectToServer(targetServer, route.workspace);
     }
-
-    showWorkspaces(workspaces, rpc);
-  } catch {
-    document.documentElement.classList.remove("app-mode");
-    setDisconnected();
+  } else {
+    // 连接失败，尝试 Level 3 重定向
+    redirectToServer(targetServer, route.workspace);
   }
 }
 
