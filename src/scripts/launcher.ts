@@ -166,13 +166,17 @@ function connectServer(server: ServerEntry): Promise<ConnectResult | null> {
       { resolve: (v: unknown) => void; reject: (e: Error) => void }
     >();
     let serverVersion: string | null = null;
+    let rpc: RpcConnection | null = null;
 
-    ws.onopen = () => {
-      if (resolved) return;
+    function tryResolve() {
+      if (resolved || !rpc || serverVersion === null) return;
       clearTimeout(timer);
       resolved = true;
+      resolve({ rpc, version: serverVersion });
+    }
 
-      const rpc: RpcConnection = {
+    ws.onopen = () => {
+      rpc = {
         call<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
           return new Promise((res, rej) => {
             const id = String(rpcNextId++);
@@ -187,7 +191,7 @@ function connectServer(server: ServerEntry): Promise<ConnectResult | null> {
           ws.close();
         },
       };
-      resolve({ rpc, version: serverVersion });
+      tryResolve();
     };
 
     ws.onmessage = (evt) => {
@@ -195,11 +199,8 @@ function connectServer(server: ServerEntry): Promise<ConnectResult | null> {
         const msg = JSON.parse(evt.data as string);
         if (msg.type === "event" && msg.event === "welcome") {
           const data = msg.data as { version?: string };
-          if (data.version) {
-            serverVersion = data.version;
-            // onopen 可能还没触发，version 会在 resolve 时传递
-            // 如果已经 resolve 了，需要补更新（但 onopen 总在 onmessage 之前？不一定）
-          }
+          serverVersion = data.version || "";
+          tryResolve();
         }
         if (msg.type === "rpc_result") {
           const p = pending.get(msg.id);
@@ -599,13 +600,7 @@ function renderLanding(servers: ServerEntry[]) {
       status === "connecting" ? "srv-connecting" :
       "srv-offline";
 
-    const versionText = status === "online" ? (version || "") : "";
-
-    // 只有一个在线服务器时省略 header
-    const onlineCount = currentServers.filter(
-      (s) => states.get(s.id)?.status === "online",
-    ).length;
-    const hideHeader = currentServers.length === 1 && onlineCount === 1 && status === "online";
+    const versionText = version ? ` v${version}` : "";
 
     let body = "";
 
@@ -624,6 +619,7 @@ function renderLanding(servers: ServerEntry[]) {
             </svg>
             <span class="ws-item-name">${ws.name}</span>
             <span class="ws-item-path">${shortenPath(ws.project_path)}</span>
+            <span class="ws-item-remove" data-id="${ws.id}" data-server="${server.id}" title="Remove">−</span>
           </button>`,
           )
           .join("")}${hasMore ? `<button class="ws-more" data-server="${server.id}">More...</button>` : ""}</div>`;
@@ -639,12 +635,11 @@ function renderLanding(servers: ServerEntry[]) {
 
     const monitorIcon = `<svg class="srv-icon ${statusClass}" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>`;
 
-    const headerHtml = hideHeader ? "" : `
+    const headerHtml = `
       <div class="srv-header" data-server-id="${server.id}">
         ${monitorIcon}
         <span class="srv-label">${server.label}</span>
-        <span class="srv-url">(${new URL(server.url).host})</span>
-        <span class="srv-version">${versionText}</span>
+        <span class="srv-url">(${new URL(server.url).host})</span>${versionText ? `<span class="srv-version">${versionText}</span>` : ""}
         ${status === "online" ? `<button class="srv-new-ws-btn" data-server="${server.id}" title="New Workspace">+</button>` : ""}
       </div>`;
 
@@ -699,6 +694,24 @@ function renderLanding(servers: ServerEntry[]) {
             },
           },
         ]);
+      });
+    });
+
+    // 工作区删除按钮
+    card.querySelectorAll(".ws-item-remove").forEach((btn) => {
+      const el = btn as HTMLElement;
+      el.addEventListener("click", async (e) => {
+        e.stopPropagation();
+        if (!rpc) return;
+        const wsId = el.dataset.id!;
+        const ws = state.workspaces.find((w) => w.id === wsId);
+        if (!ws) return;
+        if (!confirm(`Remove workspace "${ws.name}" from list?`)) return;
+        try {
+          await rpc.call("workspace.remove", { workspace_id: ws.id });
+          state.workspaces = state.workspaces.filter((w) => w.id !== wsId);
+          render();
+        } catch { /* ignore */ }
       });
     });
 
