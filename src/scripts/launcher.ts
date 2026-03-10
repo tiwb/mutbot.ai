@@ -395,26 +395,26 @@ function openServerDialog(
 ) {
   const isEdit = !!existing;
   const overlay = document.createElement("div");
-  overlay.className = "dp-overlay";
+  overlay.className = "srv-dlg-overlay";
   overlay.innerHTML = `
-    <div class="dp-dialog" style="max-width:400px">
-      <h3 class="dp-title">${isEdit ? "Edit Server" : "Add Server"}</h3>
-      <div class="dp-name-row">
+    <div class="srv-dlg-dialog">
+      <h3 class="srv-dlg-title">${isEdit ? "Edit Server" : "Add Server"}</h3>
+      <div class="srv-dlg-row">
         <label class="srv-label">Name</label>
-        <input id="srv-name" class="dp-name-input" type="text"
+        <input id="srv-name" class="srv-dlg-input" type="text"
           placeholder="e.g. office" value="${existing?.label || ""}" />
       </div>
-      <div class="dp-name-row" style="margin-top:8px">
+      <div class="srv-dlg-row" style="margin-top:8px">
         <label class="srv-label">Address</label>
-        <input id="srv-url" class="dp-name-input" type="text"
+        <input id="srv-url" class="srv-dlg-input" type="text"
           placeholder="host:port (default port 8741)" value="${existing ? new URL(existing.url).host : ""}" />
       </div>
-      <div id="srv-error" class="dp-error hidden"></div>
+      <div id="srv-error" class="srv-dlg-error hidden"></div>
       <div id="srv-test" class="srv-test-result hidden"></div>
-      <div class="dp-actions">
-        <button id="srv-cancel" class="dp-btn-secondary">Cancel</button>
-        <button id="srv-test-btn" class="dp-btn-secondary">Test</button>
-        <button id="srv-save" class="dp-btn-primary">Save</button>
+      <div class="srv-dlg-actions">
+        <button id="srv-cancel" class="srv-dlg-btn-secondary">Cancel</button>
+        <button id="srv-test-btn" class="srv-dlg-btn-secondary">Test</button>
+        <button id="srv-save" class="srv-dlg-btn-primary">Save</button>
       </div>
     </div>`;
 
@@ -608,7 +608,7 @@ function renderLanding(servers: ServerEntry[]) {
 
     if (status === "online") {
       if (workspaces.length === 0) {
-        body = `<p class="ws-status empty">No workspaces yet</p>`;
+        body = `<p class="ws-status empty">No workspaces yet — <a href="#" class="ws-create-link" data-server="${server.id}">create one</a></p>`;
       } else {
         const visible = workspaces.slice(0, MAX_VISIBLE);
         const hasMore = workspaces.length > MAX_VISIBLE;
@@ -642,7 +642,7 @@ function renderLanding(servers: ServerEntry[]) {
         ${monitorIcon}
         <span class="srv-label">${server.label}</span>
         <span class="srv-url">(${new URL(server.url).host})</span>${versionText ? `<span class="srv-version">${versionText}</span>` : ""}
-        ${status === "online" ? `<button class="srv-new-ws-btn" data-server="${server.id}" title="New Workspace">+</button>` : ""}
+        ${status === "online" ? `<button class="srv-new-ws-btn" data-server="${server.id}" title="New Workspace">+<span class="srv-new-ws-label">New</span></button>` : ""}
       </div>`;
 
     return `
@@ -730,12 +730,32 @@ function renderLanding(servers: ServerEntry[]) {
 
     // + New Workspace (hover button in header)
     const newWsBtn = card.querySelector(".srv-new-ws-btn") as HTMLElement | null;
-    if (newWsBtn && rpc) {
+    if (newWsBtn) {
       newWsBtn.addEventListener("click", (e) => {
         e.stopPropagation();
-        openDirectoryPicker(rpc, server, version);
+        navigateNewWorkspace(state, version);
       });
     }
+
+    // "create one" link in empty state
+    const createLink = card.querySelector(".ws-create-link") as HTMLElement | null;
+    if (createLink) {
+      createLink.addEventListener("click", (e) => {
+        e.preventDefault();
+        navigateNewWorkspace(state, version);
+      });
+    }
+  }
+
+  /** 生成不存在的 workspace 名称，设入 hash 触发 React 加载 */
+  function navigateNewWorkspace(state: ServerState, version: string | null) {
+    const { server, workspaces } = state;
+    const taken = new Set(workspaces.map((w) => w.name));
+    let name = "new-project";
+    let i = 1;
+    while (taken.has(name)) name = `new-project${i++}`;
+    closeAllConnections();
+    openWorkspace(name, server, version);
   }
 
   function closeAllConnections() {
@@ -930,165 +950,6 @@ function openWorkspaceSearch(
 
   overlay.addEventListener("click", (e) => {
     if (e.target === overlay) overlay.remove();
-  });
-}
-
-// ---------------------------------------------------------------------------
-// New Workspace 对话框
-// ---------------------------------------------------------------------------
-
-function openDirectoryPicker(rpc: RpcConnection, server: ServerEntry, version: string | null) {
-  const overlay = document.createElement("div");
-  overlay.className = "dp-overlay";
-  overlay.innerHTML = `
-    <div class="dp-dialog">
-      <h3 class="dp-title">New Workspace</h3>
-      <div class="dp-name-row">
-        <input id="dp-name" class="dp-name-input" type="text" placeholder="Workspace name (optional)" />
-      </div>
-      <div id="dp-path-bar" class="dp-path-bar">
-        <button id="dp-path" class="dp-path" title="Click to enter path manually">Loading...</button>
-      </div>
-      <div id="dp-error" class="dp-error hidden"></div>
-      <div id="dp-entries" class="dp-entries">
-        <div class="dp-loading">Loading...</div>
-      </div>
-      <div class="dp-actions">
-        <button id="dp-cancel" class="dp-btn-secondary">Cancel</button>
-        <button id="dp-select" class="dp-btn-primary">Create</button>
-      </div>
-    </div>`;
-
-  document.body.appendChild(overlay);
-
-  let currentPath = "";
-  let parentPath: string | null = null;
-
-  const nameInput = overlay.querySelector("#dp-name") as HTMLInputElement;
-  const pathBar = overlay.querySelector("#dp-path-bar") as HTMLDivElement;
-  const pathBtn = overlay.querySelector("#dp-path") as HTMLButtonElement;
-  const entriesDiv = overlay.querySelector("#dp-entries") as HTMLDivElement;
-  const errorDiv = overlay.querySelector("#dp-error") as HTMLDivElement;
-
-  function enterManualInput() {
-    pathBar.innerHTML = `
-      <div class="dp-input-row">
-        <input class="dp-input" type="text" value="${currentPath.replace(/"/g, "&quot;")}" />
-        <button class="dp-btn-sm">Go</button>
-      </div>`;
-    const input = pathBar.querySelector(".dp-input") as HTMLInputElement;
-    const goBtn = pathBar.querySelector(".dp-btn-sm") as HTMLButtonElement;
-    input.focus();
-    input.select();
-
-    function commitPath() {
-      const val = input.value.trim();
-      if (val) {
-        exitManualInput();
-        browse(val);
-      }
-    }
-
-    goBtn.addEventListener("click", commitPath);
-    input.addEventListener("keydown", (e) => {
-      if (e.key === "Enter") commitPath();
-      if (e.key === "Escape") exitManualInput();
-    });
-  }
-
-  function exitManualInput() {
-    pathBar.innerHTML = `<button id="dp-path" class="dp-path" title="Click to enter path manually">${currentPath || "..."}</button>`;
-    const newBtn = pathBar.querySelector("#dp-path") as HTMLButtonElement;
-    newBtn.addEventListener("click", () => enterManualInput());
-  }
-
-  pathBtn.addEventListener("click", () => enterManualInput());
-
-  async function browse(path: string) {
-    entriesDiv.innerHTML = `<div class="dp-loading">Loading...</div>`;
-    errorDiv.classList.add("hidden");
-
-    try {
-      const result = await rpc.call<BrowseResult>("filesystem.browse", {
-        path: path || undefined,
-      });
-      if (result.error) {
-        errorDiv.textContent = result.error;
-        errorDiv.classList.remove("hidden");
-        return;
-      }
-      currentPath = result.path;
-      parentPath = result.parent;
-      exitManualInput();
-
-      const dirName = currentPath.split(/[/\\]/).filter(Boolean).pop() || "";
-      nameInput.placeholder = dirName
-        ? `Workspace name (default: ${dirName})`
-        : "Workspace name (optional)";
-
-      let html = "";
-      if (parentPath) {
-        html += `<button class="dp-entry" data-path="${parentPath}"><span class="dp-entry-icon">\u2B06</span><span>..</span></button>`;
-      }
-      for (const entry of result.entries) {
-        const sep = currentPath.includes("\\") ? "\\" : "/";
-        const fullPath = currentPath + sep + entry.name;
-        html += `<button class="dp-entry" data-path="${fullPath}"><span class="dp-entry-icon">\uD83D\uDCC1</span><span>${entry.name}</span></button>`;
-      }
-      if (!html) {
-        html = `<div class="dp-empty">No subdirectories</div>`;
-      }
-      entriesDiv.innerHTML = html;
-
-      entriesDiv.querySelectorAll(".dp-entry").forEach((btn) => {
-        btn.addEventListener("click", () => {
-          const p = (btn as HTMLElement).dataset.path;
-          if (p) browse(p);
-        });
-      });
-    } catch (e) {
-      errorDiv.textContent = String(e);
-      errorDiv.classList.remove("hidden");
-    }
-  }
-
-  browse("");
-
-  overlay.querySelector("#dp-cancel")!.addEventListener("click", () => {
-    overlay.remove();
-  });
-
-  overlay.querySelector("#dp-select")!.addEventListener("click", async () => {
-    if (!currentPath) return;
-    const selectBtn = overlay.querySelector("#dp-select") as HTMLButtonElement;
-    selectBtn.disabled = true;
-    selectBtn.textContent = "Creating...";
-    errorDiv.classList.add("hidden");
-
-    try {
-      const params: Record<string, unknown> = { project_path: currentPath };
-      const name = nameInput.value.trim();
-      if (name) params.name = name;
-
-      const ws = await rpc.call<Workspace & { error?: string }>(
-        "workspace.create",
-        params,
-      );
-      if (ws.error) {
-        errorDiv.textContent = ws.error;
-        errorDiv.classList.remove("hidden");
-        selectBtn.disabled = false;
-        selectBtn.textContent = "Create";
-        return;
-      }
-      overlay.remove();
-      openWorkspace(ws.name, server, version);
-    } catch (e) {
-      errorDiv.textContent = String(e);
-      errorDiv.classList.remove("hidden");
-      selectBtn.disabled = false;
-      selectBtn.textContent = "Create";
-    }
   });
 }
 

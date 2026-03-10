@@ -370,10 +370,10 @@
 }
 
 /* ===================================================================
-   Directory picker overlay (跨域目录选择器)
+   Server dialog (Add / Edit Server)
    =================================================================== */
 
-.dp-overlay {
+.srv-dlg-overlay {
   position: fixed;
   inset: 0;
   background: rgba(0, 0, 0, 0.6);
@@ -383,210 +383,94 @@
   z-index: 9999;
 }
 
-.dp-dialog {
-  background: #252526;
-  border: 1px solid #454545;
-  width: 480px;
+.srv-dlg-dialog {
+  background: #111827;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  width: 400px;
   max-width: 95vw;
-  height: min(560px, 80vh);
   display: flex;
   flex-direction: column;
-  border-radius: 2px;
+  border-radius: 8px;
+  padding: 20px 24px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
-.dp-title {
+.srv-dlg-title {
   font-size: 14px;
   font-weight: 600;
-  padding: 14px 16px 10px;
-  color: #cccccc;
+  color: #d4d4d4;
+  margin-bottom: 14px;
 }
 
-.dp-name-row {
-  padding: 0 16px 10px;
+.srv-dlg-row {
+  margin-bottom: 2px;
 }
 
-.dp-name-input {
-  background: #3c3c3c;
-  border: 1px solid #3c3c3c;
-  color: #cccccc;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 10px;
-  width: 100%;
-  border-radius: 2px;
-  outline: none;
-}
-
-.dp-name-input:focus {
-  border-color: #007acc;
-}
-
-.dp-name-input::placeholder {
-  color: #858585;
-}
-
-.dp-path-bar {
-  padding: 0 16px 10px;
-}
-
-.dp-path {
-  background: #3c3c3c;
-  border: 1px solid #3c3c3c;
-  color: #858585;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 10px;
-  width: 100%;
-  text-align: left;
-  cursor: pointer;
-  border-radius: 2px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.dp-path:hover {
-  border-color: #858585;
-}
-
-.dp-input-row {
-  display: flex;
-  gap: 6px;
-}
-
-.dp-input {
-  flex: 1;
-  background: #3c3c3c;
-  border: 1px solid #007acc;
-  color: #cccccc;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 10px;
-  border-radius: 2px;
-  outline: none;
-}
-
-.dp-btn-sm {
-  background: #007acc;
-  border: none;
-  color: #fff;
-  font-family: inherit;
-  font-size: 12px;
-  padding: 6px 12px;
-  cursor: pointer;
-  border-radius: 2px;
-}
-
-.dp-error {
-  color: #f14c4c;
-  font-size: 12px;
-  padding: 0 16px 8px;
-}
-
-.dp-entries {
-  flex: 1;
-  overflow-y: auto;
-  min-height: 0;
-  padding: 0 8px;
-}
-
-.dp-entries::-webkit-scrollbar {
-  width: 10px;
-}
-
-.dp-entries::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.dp-entries::-webkit-scrollbar-thumb {
-  background: rgba(121, 121, 121, 0.4);
-  border-radius: 0;
-}
-
-.dp-entries::-webkit-scrollbar-thumb:hover {
-  background: rgba(121, 121, 121, 0.7);
-}
-
-.dp-loading,
-.dp-empty {
-  color: #858585;
-  font-size: 13px;
-  padding: 16px 8px;
-  text-align: center;
-}
-
-.dp-entry {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  background: none;
-  border: none;
-  color: #cccccc;
-  cursor: pointer;
+.srv-dlg-input {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: #d4d4d4;
   font-family: inherit;
   font-size: 13px;
-  padding: 6px 8px;
-  text-align: left;
-  border-radius: 2px;
-  transition: background 0.15s;
+  padding: 8px 10px;
+  width: 100%;
+  border-radius: 6px;
+  outline: none;
+  transition: border-color 0.15s;
 }
 
-.dp-entry:hover {
-  background: #3c3c3c;
+.srv-dlg-input:focus {
+  border-color: #3b82f6;
 }
 
-.dp-entry-icon {
-  flex-shrink: 0;
-  width: 18px;
-  text-align: center;
-  font-size: 14px;
+.srv-dlg-input::placeholder {
+  color: #737373;
 }
 
-.dp-actions {
+.srv-dlg-error {
+  color: #ef4444;
+  font-size: 12px;
+  padding: 8px 0 0;
+}
+
+.srv-dlg-actions {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 16px;
-  border-top: 1px solid #3c3c3c;
+  margin-top: 16px;
 }
 
-.dp-btn-primary {
-  background: #007acc;
+.srv-dlg-btn-primary {
+  background: #3b82f6;
   border: none;
   color: #fff;
   font-family: inherit;
   font-size: 13px;
-  padding: 6px 16px;
+  padding: 8px 18px;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 6px;
   transition: background 0.15s;
 }
 
-.dp-btn-primary:hover {
-  background: #1a8cd8;
+.srv-dlg-btn-primary:hover {
+  background: #2563eb;
 }
 
-.dp-btn-primary:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
-.dp-btn-secondary {
-  background: transparent;
-  border: 1px solid #3c3c3c;
+.srv-dlg-btn-secondary {
+  background: none;
+  border: 1px solid #333;
   color: #858585;
   font-family: inherit;
   font-size: 13px;
-  padding: 6px 16px;
+  padding: 8px 18px;
   cursor: pointer;
-  border-radius: 2px;
+  border-radius: 6px;
   transition: all 0.15s;
 }
 
-.dp-btn-secondary:hover {
+.srv-dlg-btn-secondary:hover {
   border-color: #858585;
-  color: #cccccc;
+  color: #d4d4d4;
 }
 
 /* ===================================================================
@@ -746,6 +630,32 @@
 .srv-new-ws-btn:hover {
   color: #e5e5e5;
   border-color: #737373;
+}
+
+.srv-new-ws-label {
+  display: none;
+}
+
+.ws-create-link {
+  color: #3b82f6;
+  text-decoration: none;
+}
+
+.ws-create-link:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 767px) {
+  .srv-new-ws-btn {
+    opacity: 1;
+    width: auto;
+    padding: 2px 8px;
+    gap: 4px;
+    font-size: 13px;
+  }
+  .srv-new-ws-label {
+    display: inline;
+  }
 }
 
 .srv-body {
