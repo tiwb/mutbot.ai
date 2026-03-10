@@ -962,6 +962,17 @@ function initPlatformTabs() {
   const panels = document.querySelectorAll<HTMLElement>(".install-panel");
   if (tabs.length === 0) return;
 
+  // 移动端：隐藏 tabs 和安装命令，显示引导文案
+  if (isMobile()) {
+    const tabsContainer = document.querySelector(".install-tabs") as HTMLElement | null;
+    if (tabsContainer) tabsContainer.style.display = "none";
+    const box = document.querySelector(".install-box") as HTMLElement | null;
+    if (box) {
+      box.innerHTML = `<p style="color:#858585;font-size:13px;margin:0">Install mutbot on your computer, connect from your phone.</p>`;
+    }
+    return;
+  }
+
   const isWindows =
     /Win/i.test(navigator.platform) ||
     (navigator as any).userAgentData?.platform === "Windows";
