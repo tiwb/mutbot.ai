@@ -1,0 +1,155 @@
+---
+/**
+ * /connect/ — 快速添加服务器并跳转首页。
+ *
+ * URL 格式：https://mutbot.ai/connect/#host:port
+ * - 地址已存在 → 直接跳转首页
+ * - 地址不存在 → 显示表单输入名称后添加并跳转
+ */
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Connect — MutBot</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body {
+        font-family: 'Inter', system-ui, sans-serif;
+        background: #030712;
+        color: #f3f4f6;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .card {
+        background: #111827;
+        border: 1px solid #1f2937;
+        border-radius: 12px;
+        padding: 2rem;
+        max-width: 400px;
+        width: 90%;
+      }
+      h2 { font-size: 1.25rem; font-weight: 600; margin-bottom: 0.5rem; }
+      .address { color: #60a5fa; font-family: monospace; font-size: 0.95rem; }
+      label { display: block; font-size: 0.875rem; color: #9ca3af; margin: 1.25rem 0 0.5rem; }
+      input {
+        width: 100%;
+        padding: 0.625rem 0.75rem;
+        background: #1f2937;
+        border: 1px solid #374151;
+        border-radius: 8px;
+        color: #f3f4f6;
+        font-size: 0.95rem;
+        outline: none;
+      }
+      input:focus { border-color: #3b82f6; }
+      .actions { margin-top: 1.5rem; display: flex; gap: 0.75rem; }
+      button {
+        flex: 1;
+        padding: 0.625rem;
+        border-radius: 8px;
+        font-size: 0.875rem;
+        font-weight: 500;
+        cursor: pointer;
+        border: none;
+      }
+      .btn-primary { background: #3b82f6; color: white; }
+      .btn-primary:hover { background: #2563eb; }
+      .btn-secondary { background: #374151; color: #d1d5db; }
+      .btn-secondary:hover { background: #4b5563; }
+    </style>
+  </head>
+  <body>
+    <div class="card" id="form-card" style="display:none">
+      <h2>Add Server</h2>
+      <p class="address" id="display-address"></p>
+      <label for="server-label">Server name</label>
+      <input type="text" id="server-label" placeholder="e.g. office, home" autofocus />
+      <div class="actions">
+        <button class="btn-secondary" id="btn-cancel">Cancel</button>
+        <button class="btn-primary" id="btn-add">Add</button>
+      </div>
+    </div>
+    <script is:inline>
+      const STORAGE_KEY = "mutbot:servers";
+
+      function getAddress() {
+        const hash = location.hash.replace(/^#\/?/, "");
+        if (!hash) return null;
+        // Basic validation: should contain digits (port) or dots (IP)
+        if (!/[\d.]/.test(hash)) return null;
+        return hash;
+      }
+
+      function loadServers() {
+        try {
+          const raw = localStorage.getItem(STORAGE_KEY);
+          return raw ? JSON.parse(raw) : [];
+        } catch { return []; }
+      }
+
+      function saveServers(servers) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(servers));
+      }
+
+      function normalizeUrl(addr) {
+        return "http://" + addr.replace(/\/$/, "");
+      }
+
+      function goHome() {
+        location.replace("/");
+      }
+
+      // --- Main logic ---
+      const address = getAddress();
+      if (!address) {
+        goHome();
+      } else {
+        const url = normalizeUrl(address);
+        const servers = loadServers();
+        const exists = servers.some(function(s) { return s.url === url; });
+
+        if (exists) {
+          goHome();
+        } else {
+          // Show form
+          var card = document.getElementById("form-card");
+          var labelInput = document.getElementById("server-label");
+          var displayAddr = document.getElementById("display-address");
+
+          displayAddr.textContent = address;
+          labelInput.value = address;
+          card.style.display = "block";
+
+          document.getElementById("btn-add").addEventListener("click", function() {
+            var label = labelInput.value.trim() || address;
+            servers.push({
+              id: crypto.randomUUID(),
+              label: label,
+              url: url,
+            });
+            saveServers(servers);
+            goHome();
+          });
+
+          document.getElementById("btn-cancel").addEventListener("click", goHome);
+
+          labelInput.addEventListener("keydown", function(e) {
+            if (e.key === "Enter") document.getElementById("btn-add").click();
+          });
+        }
+      }
+    </script>
+  </body>
+</html>
