@@ -1,6 +1,6 @@
 # mutbot.ai 总体规划
 
-**状态**：🔄 进行中
+**状态**：✅ 已完成
 **日期**：2026-02-26
 **类型**：功能设计
 
@@ -74,32 +74,21 @@ mutbot.ai 不是传统宣传页——**打开网页就是应用本身**：
 - API 版本协商（`/api/health` 返回 `api_version`）
 - 内置前端通过 fetch + WebSocket 连接本地后端
 
-### Phase 3：Config 值来源扩展
+### Phase 3：~~Config 值来源扩展~~ — 已取消
 
-**目标**：mutagent Config 支持 `${source:key}` 可扩展语法，mutbot 注册 `browser` 来源
+不再需要。Web 配置向导（原 Phase 4）已通过更简单的方式实现，无需 `${source:key}` 语法。
 
-- mutagent：`Config.register_value_source(name, resolver)` 注册机制
-- mutagent：内置 `env` 来源（`$VAR` / `${env:VAR}`，向后兼容）
-- mutbot：注册 `browser` 来源 + `BrowserValueStore`
-- config.json 使用 `"${browser:github_token}"` 占位符，实际值由前端 WebSocket 推送
+### Phase 4：~~Web 配置向导~~ — 已完成
 
-### Phase 4：Web 配置向导
+已实现 Web Setup Wizard，通过 WebSocket RPC 完成首次 LLM 配置。详见归档文档 `2026-03-03-refactor-setup-wizard.md`。
 
-**目标**：MutBot 默认通过 Web 向导完成首次 LLM 配置
+### Phase 5：身份验证 + 远程访问控制 — 待实施
 
-- mutbot 启动无 LLM 配置时进入 setup 模式（启动 Web 服务器等待配置）
-- Web 向导选项：GitHub Copilot (Free) / Anthropic / OpenAI / Custom / Skip
-- Token 存储：浏览器 localStorage（默认）或本地配置文件
-- 账号连接是可选的，用户可完全本地配置
+**目标**：远程访问 mutbot 时的身份验证机制
 
-### Phase 5：GitHub 登录 + 跨设备同步
-
-**目标**：GitHub 账号连接（可选），Gist 同步配置
-
-- 注册 MutBot 专用 GitHub OAuth App
-- Device Flow 通过本地 MutBot 代理（已有实现 `copilot/auth.py`）
-- 私有 Gist 同步用户配置（连接地址 + 偏好）
-- 未来可扩展其他 LLM 提供商账号（Google → Gemini 等）
+- 详细设计见 `mutbot/docs/specifications/feature-openid-auth.md`
+- 核心能力：OIDC 登录（GitHub 优先）、JWT session、本地自动豁免
+- mutbot.ai 侧：4401 关闭码触发登录流程，token 存 localStorage
 
 ## 5. 关键设计细节
 
@@ -133,11 +122,11 @@ uv tool install mutbot
 | WebSocket localhost | ✅ | ❌ | ❌ |
 | 重定向到 localhost | ✅ | ✅ | ✅ |
 
-### 5.4 Token 安全模型（Phase 3+）
+### 5.4 Token 安全模型
 
-- 默认存浏览器 localStorage，config.json 中仅 `${browser:...}` 占位符
-- 前端通过 WebSocket 推送 Token → 后端内存使用，不落盘
-- 明文 Token 写入 config.json 也支持（两种方式兼容）
+- LLM Token 存储在本地 `~/.mutbot/config.json`，通过 Web Setup Wizard 配置
+- 远程访问认证（Phase 5）使用 JWT session token
+- mutbot.ai 跨域场景：token 通过 URL fragment 回传，存 localStorage（按服务器分存）
 
 ### 5.5 CORS 配置（mutbot 后端）
 

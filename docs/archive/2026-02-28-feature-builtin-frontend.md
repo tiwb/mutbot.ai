@@ -1,6 +1,6 @@
 # mutbot.ai 内置前端（Level 1）— 设计规范
 
-**状态**：🔄 进行中
+**状态**：✅ 已完成
 **日期**：2026-02-28
 **类型**：功能设计
 **总体规划**：[feature-website-github-pages.md](feature-website-github-pages.md)
