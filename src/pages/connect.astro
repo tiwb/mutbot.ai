@@ -87,9 +87,18 @@
       function getAddress() {
         const hash = location.hash.replace(/^#\/?/, "");
         if (!hash) return null;
+        // Split on /# to separate address from workspace name
+        const parts = hash.split("/#");
+        var addr = parts[0];
         // Basic validation: should contain digits (port) or dots (IP)
-        if (!/[\d.]/.test(hash)) return null;
-        return hash;
+        if (!/[\d.]/.test(addr)) return null;
+        return addr;
+      }
+
+      function getWorkspace() {
+        const hash = location.hash.replace(/^#\/?/, "");
+        var parts = hash.split("/#");
+        return parts.length > 1 ? parts[1] : null;
       }
 
       function loadServers() {
@@ -108,7 +117,8 @@
       }
 
       function goHome() {
-        location.replace("/");
+        var ws = getWorkspace();
+        location.replace(ws ? "/#" + ws : "/");
       }
 
       // --- Main logic ---
