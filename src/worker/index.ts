@@ -4,20 +4,25 @@
  * 中转认证服务：帮助 mutbot 实例完成 OAuth 认证，无需每个实例单独注册 OAuth App。
  *
  * 流程：
- *   mutbot 实例 → /auth/start → GitHub 授权 → /auth/callback → 签名断言 → 回跳 mutbot 实例
+ *   mutbot 实例 → /auth/start → GitHub 授权 → /auth/callback → Ed25519 签名断言 → 回跳 mutbot 实例
  *
  * 环境变量（Secrets）：
  *   GITHUB_CLIENT_ID      — GitHub OAuth App client ID
  *   GITHUB_CLIENT_SECRET   — GitHub OAuth App client secret
- *   RELAY_SIGNING_KEY      — HMAC 签名密钥（用于签发断言 JWT）
+ *   ED25519_PRIVATE_KEY    — Ed25519 私钥（PKCS8 Base64 编码）
  */
 
 export interface Env {
 	ASSETS: Fetcher;
 	GITHUB_CLIENT_ID: string;
 	GITHUB_CLIENT_SECRET: string;
-	RELAY_SIGNING_KEY: string;
+	ED25519_PRIVATE_KEY: string;
 }
+
+// Ed25519 公钥（PEM 格式）— 与私钥配对，公开发布用于验证签名
+const ED25519_PUBLIC_KEY_PEM = `-----BEGIN PUBLIC KEY-----
+MCowBQYDK2VwAyEATkI3XCgWqnK5GWEPiANcBDWmwi1WMC2vORFlWV8Gb1M=
+-----END PUBLIC KEY-----`;
 
 export default {
 	async fetch(request: Request, env: Env): Promise<Response> {
@@ -31,7 +36,7 @@ export default {
 			return handleAuthCallback(url, env);
 		}
 		if (url.pathname === "/.well-known/mutbot-relay.json") {
-			return handleRelayMeta(url, env);
+			return handleRelayMeta();
 		}
 
 		// --- 静态资源 ---
@@ -75,7 +80,7 @@ function handleAuthStart(url: URL, env: Env): Response {
 /**
  * /auth/callback — GitHub OAuth 回调
  *
- * 接收 code，换取用户信息，签名后重定向回 mutbot 实例。
+ * 接收 code，换取用户信息，Ed25519 签名后重定向回 mutbot 实例。
  */
 async function handleAuthCallback(url: URL, env: Env): Promise<Response> {
 	const code = url.searchParams.get("code");
@@ -125,7 +130,7 @@ async function handleAuthCallback(url: URL, env: Env): Promise<Response> {
 	});
 	const user = (await userRes.json()) as Record<string, unknown>;
 
-	// 3. 签发断言 JWT
+	// 3. 签发断言 JWT（Ed25519 签名）
 	const now = Math.floor(Date.now() / 1000);
 	const assertion = await signJwt(
 		{
@@ -138,7 +143,7 @@ async function handleAuthCallback(url: URL, env: Env): Promise<Response> {
 			iat: now,
 			exp: now + 300, // 5 分钟有效（仅用于传递，mutbot 实例验证后签发自己的 session）
 		},
-		env.RELAY_SIGNING_KEY,
+		env.ED25519_PRIVATE_KEY,
 	);
 
 	// 4. 重定向回 mutbot 实例，assertion 放在 URL fragment 中（不经过服务器日志）
@@ -154,16 +159,15 @@ async function handleAuthCallback(url: URL, env: Env): Promise<Response> {
 /**
  * /.well-known/mutbot-relay.json — 中转站元信息
  *
- * mutbot 实例用此端点获取中转站的公钥（用于验证断言签名）和支持的提供商列表。
+ * mutbot 实例用此端点获取中转站的 Ed25519 公钥（用于验证断言签名）和支持的提供商列表。
  */
-function handleRelayMeta(url: URL, env: Env): Response {
+function handleRelayMeta(): Response {
 	return jsonResponse({
 		name: "MutBot Official Auth Relay",
 		version: 1,
 		providers: ["github"],
-		// HMAC 签名不暴露密钥；mutbot 实例需要配置相同的 relay 地址
-		// 未来可改为非对称签名，届时此处暴露公钥
-		verify: "shared-secret",
+		verify: "ed25519",
+		public_key: ED25519_PUBLIC_KEY_PEM,
 	});
 }
 
@@ -177,25 +181,34 @@ function decodeState(state: string): { callback: string; nonce: string; provider
 	return JSON.parse(atob(state));
 }
 
-async function signJwt(payload: object, secret: string): Promise<string> {
-	const header = { alg: "HS256", typ: "JWT" };
-	const enc = new TextEncoder();
+/**
+ * Ed25519 签名 JWT（alg: EdDSA）
+ *
+ * privateKeyB64: PKCS8 格式私钥的 Base64 编码
+ */
+async function signJwt(payload: object, privateKeyB64: string): Promise<string> {
+	const header = { alg: "EdDSA", typ: "JWT" };
 
 	const headerB64 = base64url(JSON.stringify(header));
 	const payloadB64 = base64url(JSON.stringify(payload));
 	const signingInput = `${headerB64}.${payloadB64}`;
 
+	// 导入 PKCS8 格式的 Ed25519 私钥
+	const keyData = Uint8Array.from(atob(privateKeyB64), (c) => c.charCodeAt(0));
 	const key = await crypto.subtle.importKey(
-		"raw",
-		enc.encode(secret),
-		{ name: "HMAC", hash: "SHA-256" },
+		"pkcs8",
+		keyData,
+		{ name: "Ed25519" },
 		false,
 		["sign"],
 	);
-	const sig = await crypto.subtle.sign("HMAC", key, enc.encode(signingInput));
-	const sigB64 = base64url(sig);
 
-	return `${signingInput}.${sigB64}`;
+	const sig = await crypto.subtle.sign(
+		"Ed25519",
+		key,
+		new TextEncoder().encode(signingInput),
+	);
+	return `${signingInput}.${base64url(sig)}`;
 }
 
 function base64url(input: string | ArrayBuffer): string {

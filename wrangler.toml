@@ -13,4 +13,4 @@ GITHUB_CLIENT_ID = "Ov23lim0IYf0E8KIQwbk"
 
 # 以下通过 wrangler secret 设置，不写在配置文件中：
 #   npx wrangler secret put GITHUB_CLIENT_SECRET
-#   npx wrangler secret put RELAY_SIGNING_KEY
+#   npx wrangler secret put ED25519_PRIVATE_KEY
