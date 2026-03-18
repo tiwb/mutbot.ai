@@ -297,10 +297,12 @@ function loadReactForVersion(version: string, server: ServerEntry) {
   const base = `/v${ver.version}/`;
   const url = new URL(server.url);
   const wsProtocol = url.protocol === "https:" ? "wss:" : "ws:";
+  const pathname = url.pathname.replace(/\/$/, "");
 
   (window as any).__MUTBOT_CONTEXT__ = {
     remote: true,
-    wsBase: `${wsProtocol}//${url.host}`,
+    wsBase: `${wsProtocol}//${url.host}${pathname}`,
+    basePath: pathname,
     workspace: location.hash.replace(/^#\/?/, "").split("@")[0],
   };
 
