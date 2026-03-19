@@ -131,20 +131,29 @@ async function handleAuthCallback(url: URL, env: Env): Promise<Response> {
 	const user = (await userRes.json()) as Record<string, unknown>;
 
 	// 3. 签发断言 JWT（Ed25519 签名）
+	if (!env.ED25519_PRIVATE_KEY) {
+		return jsonResponse({ error: "server_error", description: "ED25519_PRIVATE_KEY not configured" }, 500);
+	}
+
+	let assertion: string;
 	const now = Math.floor(Date.now() / 1000);
-	const assertion = await signJwt(
-		{
-			sub: `github:${user.login}`,
-			name: (user.name as string) || (user.login as string),
-			avatar: user.avatar_url as string,
-			provider: "github",
-			nonce: state.nonce,
-			aud: state.callback,
-			iat: now,
-			exp: now + 300, // 5 分钟有效（仅用于传递，mutbot 实例验证后签发自己的 session）
-		},
-		env.ED25519_PRIVATE_KEY,
-	);
+	try {
+		assertion = await signJwt(
+			{
+				sub: `github:${user.login}`,
+				name: (user.name as string) || (user.login as string),
+				avatar: user.avatar_url as string,
+				provider: "github",
+				nonce: state.nonce,
+				aud: state.callback,
+				iat: now,
+				exp: now + 300, // 5 分钟有效（仅用于传递，mutbot 实例验证后签发自己的 session）
+			},
+			env.ED25519_PRIVATE_KEY,
+		);
+	} catch (e) {
+		return jsonResponse({ error: "signing_error", description: `JWT signing failed: ${e}` }, 500);
+	}
 
 	// 4. 重定向回 mutbot 实例，assertion 放在 URL fragment 中（不经过服务器日志）
 	const callbackUrl = new URL(state.callback);
