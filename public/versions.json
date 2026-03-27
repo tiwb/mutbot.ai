@@ -1,5 +1,5 @@
 {
-  "latest": "0.8.2",
+  "latest": "0.8.3",
   "versions": [
     {
       "version": "0.2.0",
@@ -118,6 +118,14 @@
       "date": "2026-03-19",
       "entry": {
         "js": "assets/index-xij_nMfj.js",
+        "css": "assets/index-BiS4MPoo.css"
+      }
+    },
+    {
+      "version": "0.8.3",
+      "date": "2026-03-27",
+      "entry": {
+        "js": "assets/index-B3oozfrD.js",
         "css": "assets/index-BiS4MPoo.css"
       }
     }
