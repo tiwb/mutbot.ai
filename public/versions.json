@@ -1,5 +1,5 @@
 {
-  "latest": "0.8.6",
+  "latest": "0.8.7",
   "versions": [
     {
       "version": "0.2.0",
@@ -148,6 +148,14 @@
     {
       "version": "0.8.6",
       "date": "2026-04-24",
+      "entry": {
+        "js": "assets/index-CV1ksNnE.js",
+        "css": "assets/index-BGgKcw91.css"
+      }
+    },
+    {
+      "version": "0.8.7",
+      "date": "2026-05-15",
       "entry": {
         "js": "assets/index-CV1ksNnE.js",
         "css": "assets/index-BGgKcw91.css"
